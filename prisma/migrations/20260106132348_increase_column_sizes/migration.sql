@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "labor_sop" ALTER COLUMN "crop_code" SET DATA TYPE VARCHAR(100),
+ALTER COLUMN "task" SET DATA TYPE TEXT;
