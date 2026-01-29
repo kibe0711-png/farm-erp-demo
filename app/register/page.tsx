@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -39,9 +40,9 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm p-8 bg-white rounded-lg shadow-sm border border-gray-200">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-6 text-center">
-          Create Account
-        </h1>
+        <div className="flex justify-center mb-6">
+          <Image src="/souk-logo.png" alt="Souk FarmIQ" width={180} height={60} priority />
+        </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
