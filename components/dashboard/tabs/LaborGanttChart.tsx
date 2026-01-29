@@ -159,12 +159,14 @@ export default function LaborGanttChart({ activities, weekStartDate, farmPhaseId
             </tr>
           </thead>
           <tbody>
-            {activities.map((act) => {
+            {activities.map((act, idx) => {
               const days = toggled[act.key] || new Set();
               const mandaysPerDay = getManDaysPerDay(act.key, act.totalMandays);
+              const prevAct = idx > 0 ? activities[idx - 1] : null;
+              const isNewPhase = !prevAct || prevAct.farmPhaseId !== act.farmPhaseId;
 
               return (
-                <tr key={act.key} className="border-b border-gray-100">
+                <tr key={act.key} className={`border-b border-gray-100 ${isNewPhase && idx > 0 ? "border-t-2 border-t-gray-300" : ""}`}>
                   <td className="py-2 px-3 text-gray-800 font-medium text-xs">
                     {act.label}
                   </td>
