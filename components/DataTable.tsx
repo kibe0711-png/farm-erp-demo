@@ -1,7 +1,8 @@
 "use client";
 
 interface DataTableProps {
-  data: Record<string, unknown>[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any[];
   columns: { key: string; label: string }[];
   loading?: boolean;
 }
