@@ -76,10 +76,38 @@ export default function FeedingTab() {
               const weekEnd = new Date(selectedMonday);
               weekEnd.setDate(weekEnd.getDate() + 6);
               weekEnd.setHours(23, 59, 59, 999);
-              const actual = feedingRecords.filter((r) => {
+              const farmRecords = feedingRecords.filter((r) => {
                 const d = new Date(r.applicationDate);
                 return fp.some((p) => p.id === r.farmPhaseId) && d >= selectedMonday && d <= weekEnd;
-              }).length;
+              });
+              const actual = farmRecords.length;
+
+              // SOP compliance calculation
+              let totalVariance = 0;
+              let complianceCount = 0;
+              fp.forEach((phase) => {
+                const ws = calculateWeeksSinceSowing(phase.sowingDate, selectedMonday);
+                const pr = farmRecords.filter((r) => r.farmPhaseId === phase.id);
+                const areaHa = parseFloat(String(phase.areaHa)) || 0;
+                const byProduct: Record<string, number> = {};
+                pr.forEach((r) => {
+                  byProduct[r.product] = (byProduct[r.product] || 0) + (parseFloat(String(r.actualQty)) || 0);
+                });
+                Object.entries(byProduct).forEach(([product, actualQty]) => {
+                  const sop = nutriSop.find(
+                    (s) => s.cropCode === phase.cropCode && s.products === product && s.week === ws
+                  );
+                  if (sop) {
+                    const expectedQty = (parseFloat(String(sop.rateHa)) || 0) * areaHa;
+                    if (expectedQty > 0) {
+                      totalVariance += Math.max(0, 100 - Math.abs((actualQty - expectedQty) / expectedQty) * 100);
+                      complianceCount++;
+                    }
+                  }
+                });
+              });
+              const avgCompliance = complianceCount > 0 ? totalVariance / complianceCount : null;
+              const hasRecords = farmRecords.length > 0;
 
               return (
                 <button
@@ -109,6 +137,30 @@ export default function FeedingTab() {
                       <p className="text-xs text-gray-500 uppercase tracking-wide">Actual</p>
                     </div>
                   </div>
+
+                  {/* SOP Compliance */}
+                  {hasRecords && avgCompliance !== null ? (
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-gray-600 font-medium">Compliance</span>
+                        <span className={`text-lg font-bold ${avgCompliance >= 95 ? "text-green-600" : avgCompliance >= 80 ? "text-yellow-600" : "text-red-600"}`}>
+                          {avgCompliance.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${avgCompliance >= 95 ? "bg-green-500" : avgCompliance >= 80 ? "bg-yellow-500" : "bg-red-500"}`}
+                          style={{ width: `${Math.min(100, avgCompliance)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : hasRecords ? (
+                    <p className="text-xs text-gray-400 mt-4">No SOP match for records</p>
+                  ) : expected > 0 ? (
+                    <p className="text-xs text-orange-500 mt-4 font-medium">
+                      {expected} feeding record{expected !== 1 ? "s" : ""} pending
+                    </p>
+                  ) : null}
                 </button>
               );
             })}
