@@ -52,6 +52,17 @@ export interface FeedingRecord {
   notes: string | null;
 }
 
+export interface LaborLogRecord {
+  id: number;
+  farmPhaseId: number;
+  logDate: string;
+  task: string;
+  casuals: number;
+  costPerDay: string | number;
+  totalCost: string | number;
+  notes: string | null;
+}
+
 export interface FarmItem {
   id: number;
   name: string;
@@ -170,6 +181,7 @@ interface DashboardContextValue {
   laborSop: LaborSopItem[];
   nutriSop: NutriSopItem[];
   feedingRecords: FeedingRecord[];
+  laborLogs: LaborLogRecord[];
   farms: FarmItem[];
   loading: boolean;
 
@@ -190,6 +202,7 @@ interface DashboardContextValue {
   fetchLaborSop: () => Promise<void>;
   fetchNutriSop: () => Promise<void>;
   fetchFeedingRecords: () => Promise<void>;
+  fetchLaborLogs: () => Promise<void>;
   fetchFarms: () => Promise<void>;
 
   // Upload handlers
@@ -205,6 +218,10 @@ interface DashboardContextValue {
   // Feeding
   handleFeedingSubmit: (form: { product: string; actualQty: string; applicationDate: string; notes: string }, phase: Phase) => Promise<void>;
   handleDeleteFeedingRecord: (id: number) => Promise<void>;
+
+  // Labor Logs
+  handleLaborLogSubmit: (form: { task: string; casuals: string; logDate: string; notes: string }, phase: Phase) => Promise<void>;
+  handleDeleteLaborLog: (id: number) => Promise<void>;
 
   // User
   user: AuthUser | null;
@@ -227,6 +244,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [laborSop, setLaborSop] = useState<LaborSopItem[]>([]);
   const [nutriSop, setNutriSop] = useState<NutriSopItem[]>([]);
   const [feedingRecords, setFeedingRecords] = useState<FeedingRecord[]>([]);
+  const [laborLogs, setLaborLogs] = useState<LaborLogRecord[]>([]);
   const [farms, setFarms] = useState<FarmItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -288,6 +306,15 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const fetchLaborLogs = useCallback(async () => {
+    try {
+      const res = await fetch("/api/labor-logs");
+      if (res.ok) setLaborLogs(await res.json());
+    } catch (error) {
+      console.error("Failed to fetch labor logs:", error);
+    }
+  }, []);
+
   const fetchFarms = useCallback(async () => {
     try {
       const res = await fetch("/api/farms");
@@ -317,8 +344,9 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     fetchLaborSop();
     fetchNutriSop();
     fetchFeedingRecords();
+    fetchLaborLogs();
     fetchFarms();
-  }, [fetchUser, fetchPhases, fetchLaborSop, fetchNutriSop, fetchFeedingRecords, fetchFarms]);
+  }, [fetchUser, fetchPhases, fetchLaborSop, fetchNutriSop, fetchFeedingRecords, fetchLaborLogs, fetchFarms]);
 
   // ── Upload handlers ──────────────────────────────────────────────
   const handlePhaseUpload = async (data: Record<string, string>[]) => {
@@ -413,6 +441,48 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     fetchFeedingRecords();
   };
 
+  // ── Labor Log handlers ─────────────────────────────────────────
+  const handleLaborLogSubmit = async (
+    form: { task: string; casuals: string; logDate: string; notes: string },
+    phase: Phase
+  ) => {
+    const farmOverride = farms.find((f) => f.name === phase.farm);
+    const overrideRate = farmOverride?.laborRatePerDay != null
+      ? parseFloat(String(farmOverride.laborRatePerDay))
+      : null;
+
+    const casuals = parseInt(form.casuals) || 0;
+    const costPerDay = (overrideRate != null && overrideRate > 0) ? overrideRate : 0;
+    const totalCost = casuals * costPerDay;
+
+    const res = await fetch("/api/labor-logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        farmPhaseId: phase.id,
+        logDate: form.logDate,
+        task: form.task,
+        casuals,
+        costPerDay,
+        totalCost,
+        notes: form.notes || null,
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || "Failed to save record");
+    }
+    fetchLaborLogs();
+  };
+
+  const handleDeleteLaborLog = async (id: number) => {
+    if (!confirm("Delete this labor log?")) return;
+    const res = await fetch(`/api/labor-logs?id=${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete");
+    fetchLaborLogs();
+  };
+
   const userName = user?.name ?? "";
 
   // ── Logout ───────────────────────────────────────────────────────
@@ -496,6 +566,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         laborSop,
         nutriSop,
         feedingRecords,
+        laborLogs,
         farms,
         loading,
         selectedYear,
@@ -510,6 +581,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         fetchLaborSop,
         fetchNutriSop,
         fetchFeedingRecords,
+        fetchLaborLogs,
         fetchFarms,
         handlePhaseUpload,
         handleLaborUpload,
@@ -519,6 +591,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         handleClearNutri,
         handleFeedingSubmit,
         handleDeleteFeedingRecord,
+        handleLaborLogSubmit,
+        handleDeleteLaborLog,
         user,
         userName,
         handleLogout,

@@ -72,6 +72,20 @@ model FeedingRecord {
   @@map("feeding_records")
 }
 
+model LaborLog {
+  id          Int      @id @default(autoincrement())
+  farmPhaseId Int      @map("farm_phase_id")
+  logDate     DateTime @map("log_date") @db.Date
+  task        String   @db.Text
+  casuals     Int
+  costPerDay  Decimal  @map("cost_per_day") @db.Decimal(10, 2)
+  totalCost   Decimal  @map("total_cost") @db.Decimal(12, 2)
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("labor_logs")
+}
+
 model LaborSchedule {
   id            Int      @id @default(autoincrement())
   farmPhaseId   Int      @map("farm_phase_id")

@@ -22,7 +22,7 @@ export default function Sidebar({ activeSection, onSectionChange }: SidebarProps
     <aside className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 flex flex-col z-30">
       {/* Logo / Title */}
       <div className="px-6 py-5 border-b border-gray-200">
-        <h1 className="text-lg font-semibold text-gray-900">Farm Data Manager</h1>
+        <h1 className="text-lg font-semibold text-gray-900">Souk FarmIQ</h1>
       </div>
 
       <nav className="flex-1 overflow-y-auto py-4">
