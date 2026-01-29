@@ -55,8 +55,25 @@ export async function POST(request: Request) {
       };
     });
 
+    // Find-or-create Farm records for each unique farm name
+    const uniqueFarmNames = [...new Set(records.map((r) => r.farm).filter(Boolean))];
+    const farmMap = new Map<string, number>();
+    for (const name of uniqueFarmNames) {
+      const farm = await prisma.farm.upsert({
+        where: { name },
+        update: {},
+        create: { name },
+      });
+      farmMap.set(name, farm.id);
+    }
+
+    const recordsWithFarmId = records.map((r) => ({
+      ...r,
+      farmId: farmMap.get(r.farm) ?? null,
+    }));
+
     const result = await prisma.farmPhase.createMany({
-      data: records,
+      data: recordsWithFarmId,
     });
 
     return NextResponse.json({ success: true, count: result.count });

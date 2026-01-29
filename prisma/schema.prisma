@@ -7,12 +7,24 @@ datasource db {
   provider = "postgresql"
 }
 
+model Farm {
+  id              Int         @id @default(autoincrement())
+  name            String      @unique @db.VarChar(100)
+  laborRatePerDay Decimal?    @map("labor_rate_per_day") @db.Decimal(10, 2)
+  createdAt       DateTime    @default(now()) @map("created_at")
+  phases          FarmPhase[]
+
+  @@map("farms")
+}
+
 model FarmPhase {
   id         Int      @id @default(autoincrement())
   cropCode   String   @map("crop_code") @db.VarChar(50)
   phaseId    String   @map("phase_id") @db.VarChar(50)
   sowingDate DateTime @map("sowing_date") @db.Date
   farm       String   @db.VarChar(100)
+  farmId     Int?     @map("farm_id")
+  farmRef    Farm?    @relation(fields: [farmId], references: [id])
   areaHa     Decimal  @default(0) @map("area_ha") @db.Decimal(10, 4)
   createdAt  DateTime @default(now()) @map("created_at")
 
@@ -58,6 +70,18 @@ model FeedingRecord {
   createdAt       DateTime @default(now()) @map("created_at")
 
   @@map("feeding_records")
+}
+
+model LaborSchedule {
+  id            Int      @id @default(autoincrement())
+  farmPhaseId   Int      @map("farm_phase_id")
+  laborSopId    Int      @map("labor_sop_id")
+  weekStartDate DateTime @map("week_start_date") @db.Date
+  dayOfWeek     Int      @map("day_of_week")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([farmPhaseId, laborSopId, weekStartDate, dayOfWeek])
+  @@map("labor_schedules")
 }
 
 model User {

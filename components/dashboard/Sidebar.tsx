@@ -2,7 +2,7 @@
 
 import { useDashboard } from "./DashboardContext";
 
-export type SidebarTab = "phases" | "labor" | "nutri" | "operations";
+export type SidebarTab = "phases" | "labor" | "nutri" | "operations" | "settings";
 
 interface SidebarProps {
   activeSection: SidebarTab;
@@ -59,6 +59,22 @@ export default function Sidebar({ activeSection, onSectionChange }: SidebarProps
           style={{ width: "calc(100% - 16px)" }}
         >
           Operations
+        </button>
+
+        {/* Settings */}
+        <p className="text-xs uppercase text-gray-400 font-semibold px-4 mt-6 mb-2 tracking-wider">
+          Settings
+        </p>
+        <button
+          onClick={() => onSectionChange("settings")}
+          className={`flex items-center gap-3 w-full px-4 py-2.5 mx-2 rounded-lg text-sm transition-colors ${
+            activeSection === "settings"
+              ? "bg-blue-50 text-blue-700 font-medium"
+              : "text-gray-600 hover:bg-gray-50"
+          }`}
+          style={{ width: "calc(100% - 16px)" }}
+        >
+          Farm Settings
         </button>
       </nav>
 

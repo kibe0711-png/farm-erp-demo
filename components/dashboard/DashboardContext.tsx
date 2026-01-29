@@ -52,6 +52,12 @@ export interface FeedingRecord {
   notes: string | null;
 }
 
+export interface FarmItem {
+  id: number;
+  name: string;
+  laborRatePerDay: string | number | null;
+}
+
 export interface AuthUser {
   id: number;
   email: string;
@@ -164,6 +170,7 @@ interface DashboardContextValue {
   laborSop: LaborSopItem[];
   nutriSop: NutriSopItem[];
   feedingRecords: FeedingRecord[];
+  farms: FarmItem[];
   loading: boolean;
 
   // Week state
@@ -183,6 +190,7 @@ interface DashboardContextValue {
   fetchLaborSop: () => Promise<void>;
   fetchNutriSop: () => Promise<void>;
   fetchFeedingRecords: () => Promise<void>;
+  fetchFarms: () => Promise<void>;
 
   // Upload handlers
   handlePhaseUpload: (data: Record<string, string>[]) => Promise<void>;
@@ -219,6 +227,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [laborSop, setLaborSop] = useState<LaborSopItem[]>([]);
   const [nutriSop, setNutriSop] = useState<NutriSopItem[]>([]);
   const [feedingRecords, setFeedingRecords] = useState<FeedingRecord[]>([]);
+  const [farms, setFarms] = useState<FarmItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
 
@@ -279,6 +288,15 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const fetchFarms = useCallback(async () => {
+    try {
+      const res = await fetch("/api/farms");
+      if (res.ok) setFarms(await res.json());
+    } catch (error) {
+      console.error("Failed to fetch farms:", error);
+    }
+  }, []);
+
   // Fetch current user
   const fetchUser = useCallback(async () => {
     try {
@@ -299,7 +317,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     fetchLaborSop();
     fetchNutriSop();
     fetchFeedingRecords();
-  }, [fetchUser, fetchPhases, fetchLaborSop, fetchNutriSop, fetchFeedingRecords]);
+    fetchFarms();
+  }, [fetchUser, fetchPhases, fetchLaborSop, fetchNutriSop, fetchFeedingRecords, fetchFarms]);
 
   // ── Upload handlers ──────────────────────────────────────────────
   const handlePhaseUpload = async (data: Record<string, string>[]) => {
@@ -313,6 +332,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       throw new Error(error.error || "Upload failed");
     }
     fetchPhases();
+    fetchFarms();
   };
 
   const handleLaborUpload = async (data: Record<string, string>[]) => {
@@ -417,8 +437,17 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       (sop) => sop.cropCode === phase.cropCode && sop.week === weeksSinceSowing
     );
     const areaHa = parseFloat(String(phase.areaHa)) || 0;
+
+    // Check for per-farm labor rate override
+    const farmOverride = farms.find((f) => f.name === phase.farm);
+    const overrideRate = farmOverride?.laborRatePerDay != null
+      ? parseFloat(String(farmOverride.laborRatePerDay))
+      : null;
+
     return matchingSop.reduce((total, sop) => {
-      const costPerDay = parseFloat(String(sop.costPerCasualDay)) || 0;
+      const costPerDay = (overrideRate != null && overrideRate > 0)
+        ? overrideRate
+        : parseFloat(String(sop.costPerCasualDay)) || 0;
       const totalMandays = sop.noOfCasuals * sop.noOfDays * areaHa;
       return total + totalMandays * costPerDay;
     }, 0);
@@ -467,6 +496,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         laborSop,
         nutriSop,
         feedingRecords,
+        farms,
         loading,
         selectedYear,
         setSelectedYear,
@@ -480,6 +510,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         fetchLaborSop,
         fetchNutriSop,
         fetchFeedingRecords,
+        fetchFarms,
         handlePhaseUpload,
         handleLaborUpload,
         handleNutriUpload,

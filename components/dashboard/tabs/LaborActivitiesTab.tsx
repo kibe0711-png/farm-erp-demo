@@ -1,19 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import DataTable from "@/components/DataTable";
 import WeekSelector from "../WeekSelector";
+import LaborGanttChart, { type GanttActivity } from "./LaborGanttChart";
 import {
   useDashboard,
   calculateWeeksSinceSowing,
-  ACTIVITY_COLUMNS,
 } from "../DashboardContext";
 
 export default function LaborActivitiesTab() {
   const {
     phases,
     laborSop,
-    loading,
+    farms,
     selectedMonday,
     selectedWeek,
     farmSummaries,
@@ -30,31 +29,24 @@ export default function LaborActivitiesTab() {
         }))
     : [];
 
-  const laborActivities = farmPhases.flatMap((phase) => {
+  // Build Gantt activities with SOP ID and farmPhaseId
+  const ganttActivities: GanttActivity[] = farmPhases.flatMap((phase) => {
     const weekNum = phase.weeksSinceSowing;
     if (weekNum < 0) return [];
     const matchingSop = laborSop.filter(
       (sop) => sop.cropCode === phase.cropCode && sop.week === weekNum
     );
     const areaHa = parseFloat(String(phase.areaHa)) || 0;
-    return matchingSop.map((sop) => {
-      const costPerDay = parseFloat(String(sop.costPerCasualDay)) || 0;
-      const totalMandays = sop.noOfCasuals * sop.noOfDays * areaHa;
-      const totalCost = totalMandays * costPerDay;
-      return {
-        phaseId: phase.phaseId,
-        cropCode: phase.cropCode,
-        areaHa: areaHa.toFixed(2),
-        week: weekNum,
-        task: sop.task,
-        casuals: sop.noOfCasuals,
-        days: sop.noOfDays,
-        totalMandays: totalMandays.toFixed(1),
-        costPerDay: costPerDay.toFixed(0),
-        totalCost: totalCost.toLocaleString(),
-      };
-    });
+    return matchingSop.map((sop) => ({
+      key: `${phase.id}-${sop.id}`,
+      label: `${phase.phaseId} W${weekNum} - ${sop.task}`,
+      farmPhaseId: phase.id,
+      sopId: sop.id,
+      totalMandays: sop.noOfCasuals * sop.noOfDays * areaHa,
+    }));
   });
+
+  const farmPhaseIds = farmPhases.map((p) => p.id);
 
   return (
     <div className="space-y-6">
@@ -155,15 +147,13 @@ export default function LaborActivitiesTab() {
 
           <div>
             <h3 className="text-sm font-medium text-gray-700 mb-2">
-              Labor Activities for Week {selectedWeek}
+              Weekly Schedule — Week {selectedWeek}
             </h3>
-            {laborActivities.length === 0 ? (
-              <p className="text-gray-500 text-sm py-4">
-                No labor activities for the current week.
-              </p>
-            ) : (
-              <DataTable data={laborActivities} columns={ACTIVITY_COLUMNS} loading={loading} />
-            )}
+            <LaborGanttChart
+              activities={ganttActivities}
+              weekStartDate={selectedMonday}
+              farmPhaseIds={farmPhaseIds}
+            />
           </div>
         </div>
       )}

@@ -7,6 +7,7 @@ import PhasesTab from "./tabs/PhasesTab";
 import LaborSopTab from "./tabs/LaborSopTab";
 import NutriSopTab from "./tabs/NutriSopTab";
 import OperationsView from "./tabs/OperationsView";
+import FarmSettingsTab from "./tabs/FarmSettingsTab";
 
 export default function DashboardShell() {
   const [activeSection, setActiveSection] = useState<SidebarTab>("phases");
@@ -20,6 +21,7 @@ export default function DashboardShell() {
           {activeSection === "labor" && <LaborSopTab />}
           {activeSection === "nutri" && <NutriSopTab />}
           {activeSection === "operations" && <OperationsView />}
+          {activeSection === "settings" && <FarmSettingsTab />}
         </main>
       </div>
     </DashboardProvider>
