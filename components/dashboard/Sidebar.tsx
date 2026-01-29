@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import { useDashboard } from "./DashboardContext";
+import { ROLE_LABELS, type UserRoleType } from "@/lib/auth/roles";
 
-export type SidebarTab = "phases" | "labor" | "nutri" | "operations" | "settings";
+export type SidebarTab = "phases" | "labor" | "nutri" | "operations" | "settings" | "users";
 
 interface SidebarProps {
   activeSection: SidebarTab;
@@ -17,7 +18,8 @@ const DATA_ITEMS: { id: SidebarTab; label: string }[] = [
 ];
 
 export default function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
-  const { handleLogout, userName } = useDashboard();
+  const { handleLogout, userName, user } = useDashboard();
+  const isAdmin = user?.role === "ADMIN";
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 flex flex-col z-30">
@@ -77,12 +79,36 @@ export default function Sidebar({ activeSection, onSectionChange }: SidebarProps
         >
           Farm Settings
         </button>
+
+        {isAdmin && (
+          <>
+            <p className="text-xs uppercase text-gray-400 font-semibold px-4 mt-6 mb-2 tracking-wider">
+              Admin
+            </p>
+            <button
+              onClick={() => onSectionChange("users")}
+              className={`flex items-center gap-3 w-full px-4 py-2.5 mx-2 rounded-lg text-sm transition-colors ${
+                activeSection === "users"
+                  ? "bg-blue-50 text-blue-700 font-medium"
+                  : "text-gray-600 hover:bg-gray-50"
+              }`}
+              style={{ width: "calc(100% - 16px)" }}
+            >
+              Users Management
+            </button>
+          </>
+        )}
       </nav>
 
       {/* User + Logout */}
       <div className="border-t border-gray-200 p-4">
         {userName && (
-          <p className="text-sm font-medium text-gray-900 mb-2 px-2">{userName}</p>
+          <div className="mb-2 px-2">
+            <p className="text-sm font-medium text-gray-900">{userName}</p>
+            {user?.role && (
+              <p className="text-xs text-gray-500">{ROLE_LABELS[user.role as UserRoleType] ?? user.role}</p>
+            )}
+          </div>
         )}
         <button
           onClick={handleLogout}
