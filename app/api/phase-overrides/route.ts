@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth/getAuthUser";
+import { hasPermission, Permission } from "@/lib/auth/roles";
 
 // GET ?farmPhaseIds=1,2,3&weekStart=2026-01-26&sopType=labor
 export async function GET(request: Request) {
@@ -34,8 +36,14 @@ export async function GET(request: Request) {
 }
 
 // POST — upsert an override
+// Requires EDIT_GANTT permission
 export async function POST(request: Request) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser || !hasPermission(authUser.role, Permission.EDIT_GANTT)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { farmPhaseId, sopId, sopType, action, weekStart } = body as {
       farmPhaseId: number;
@@ -89,8 +97,14 @@ export async function POST(request: Request) {
 }
 
 // DELETE ?farmPhaseId=1&sopId=5&sopType=labor&weekStart=2026-01-26
+// Requires EDIT_GANTT permission
 export async function DELETE(request: Request) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser || !hasPermission(authUser.role, Permission.EDIT_GANTT)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const farmPhaseId = Number(searchParams.get("farmPhaseId"));
     const sopId = Number(searchParams.get("sopId"));

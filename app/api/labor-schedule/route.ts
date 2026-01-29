@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth/getAuthUser";
+import { hasPermission, Permission } from "@/lib/auth/roles";
 
 // GET ?farmPhaseIds=1,2,3&weekStart=2026-01-26
 export async function GET(request: Request) {
@@ -29,8 +31,14 @@ export async function GET(request: Request) {
 }
 
 // POST — save schedule (replace all entries for given phases/week)
+// Requires EDIT_GANTT permission
 export async function POST(request: Request) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser || !hasPermission(authUser.role, Permission.EDIT_GANTT)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { entries, weekStartDate, farmPhaseIds } = body as {
       entries: { farmPhaseId: number; laborSopId: number; dayOfWeek: number }[];

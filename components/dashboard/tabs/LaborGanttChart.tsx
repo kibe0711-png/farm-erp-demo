@@ -25,6 +25,7 @@ interface Props {
   activities: GanttActivity[];
   weekStartDate: Date; // The Monday of the selected week
   farmPhaseIds: number[];
+  canEdit?: boolean;
   onRemoveActivity?: (key: string) => void;
   onAddActivity?: (sopId: number, farmPhaseId: number) => void;
   onUndoOverride?: (key: string) => void;
@@ -42,6 +43,7 @@ export default function LaborGanttChart({
   activities,
   weekStartDate,
   farmPhaseIds,
+  canEdit = false,
   onRemoveActivity,
   onAddActivity,
   onUndoOverride,
@@ -54,6 +56,7 @@ export default function LaborGanttChart({
   const [loaded, setLoaded] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [showAddDropdown, setShowAddDropdown] = useState(false);
+  const [selectedAddPhase, setSelectedAddPhase] = useState<number | null>(null);
 
   const weekStr = weekStartDate.toISOString().split("T")[0];
 
@@ -174,29 +177,69 @@ export default function LaborGanttChart({
 
   return (
     <div className="space-y-3">
-      {/* Add Activity button */}
-      {onAddActivity && availableActivities && availableActivities.length > 0 && (
+      {/* Add Activity button — phase → SOP drill-down */}
+      {canEdit && onAddActivity && availableActivities && availableActivities.length > 0 && (
         <div className="flex justify-end relative">
           <button
-            onClick={() => setShowAddDropdown(!showAddDropdown)}
+            onClick={() => {
+              setShowAddDropdown(!showAddDropdown);
+              setSelectedAddPhase(null);
+            }}
             className="bg-teal-50 text-teal-700 border border-teal-200 px-3 py-1.5 rounded text-sm font-medium hover:bg-teal-100"
           >
             + Add Activity
           </button>
           {showAddDropdown && (
-            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto min-w-[280px]">
-              {availableActivities.map((item) => (
-                <button
-                  key={`${item.farmPhaseId}-${item.sopId}`}
-                  onClick={() => {
-                    onAddActivity(item.sopId, item.farmPhaseId);
-                    setShowAddDropdown(false);
-                  }}
-                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-teal-50 border-b border-gray-100 last:border-0"
-                >
-                  {item.label}
-                </button>
-              ))}
+            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-72 overflow-y-auto min-w-[300px]">
+              {selectedAddPhase === null ? (
+                <>
+                  <div className="px-4 py-2 text-xs font-semibold text-gray-500 border-b border-gray-200 bg-gray-50">
+                    Select Phase
+                  </div>
+                  {(() => {
+                    const phaseIds = [...new Set(availableActivities.map((a) => a.farmPhaseId))];
+                    return phaseIds.map((fpId) => {
+                      const first = availableActivities.find((a) => a.farmPhaseId === fpId)!;
+                      const phaseName = first.label.split(" W")[0];
+                      const count = availableActivities.filter((a) => a.farmPhaseId === fpId).length;
+                      return (
+                        <button
+                          key={fpId}
+                          onClick={() => setSelectedAddPhase(fpId)}
+                          className="flex items-center justify-between w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-teal-50 border-b border-gray-100 last:border-0"
+                        >
+                          <span className="font-medium">{phaseName}</span>
+                          <span className="text-xs text-gray-400">{count} SOPs &rarr;</span>
+                        </button>
+                      );
+                    });
+                  })()}
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setSelectedAddPhase(null)}
+                    className="w-full text-left px-4 py-2 text-xs text-teal-600 hover:text-teal-700 border-b border-gray-200 bg-gray-50 font-medium"
+                  >
+                    &larr; Back to phases
+                  </button>
+                  {availableActivities
+                    .filter((a) => a.farmPhaseId === selectedAddPhase)
+                    .map((item) => (
+                      <button
+                        key={`${item.farmPhaseId}-${item.sopId}`}
+                        onClick={() => {
+                          onAddActivity(item.sopId, item.farmPhaseId);
+                          setShowAddDropdown(false);
+                          setSelectedAddPhase(null);
+                        }}
+                        className="block w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-teal-50 border-b border-gray-100 last:border-0"
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -238,7 +281,7 @@ export default function LaborGanttChart({
                           added
                         </span>
                       )}
-                      {onRemoveActivity && !isAdded && (
+                      {canEdit && onRemoveActivity && !isAdded && (
                         <button
                           onClick={() => onRemoveActivity(act.key)}
                           className="text-red-400 hover:text-red-600 text-xs font-bold shrink-0"
@@ -247,7 +290,7 @@ export default function LaborGanttChart({
                           x
                         </button>
                       )}
-                      {isAdded && onUndoOverride && (
+                      {canEdit && isAdded && onUndoOverride && (
                         <button
                           onClick={() => onUndoOverride(act.key)}
                           className="text-gray-400 hover:text-gray-600 text-xs shrink-0"
@@ -262,16 +305,28 @@ export default function LaborGanttChart({
                     const isActive = days.has(dayIdx);
                     return (
                       <td key={dayIdx} className="py-1 px-1 text-center">
-                        <button
-                          onClick={() => toggleCell(act.key, dayIdx)}
-                          className={`w-full h-10 rounded text-xs font-semibold transition-colors ${
-                            isActive
-                              ? "bg-teal-600 text-white hover:bg-teal-700"
-                              : "bg-gray-100 text-gray-400 hover:bg-gray-200"
-                          }`}
-                        >
-                          {isActive ? mandaysPerDay.toFixed(1) : ""}
-                        </button>
+                        {canEdit ? (
+                          <button
+                            onClick={() => toggleCell(act.key, dayIdx)}
+                            className={`w-full h-10 rounded text-xs font-semibold transition-colors ${
+                              isActive
+                                ? "bg-teal-600 text-white hover:bg-teal-700"
+                                : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                            }`}
+                          >
+                            {isActive ? mandaysPerDay.toFixed(1) : ""}
+                          </button>
+                        ) : (
+                          <div
+                            className={`w-full h-10 rounded text-xs font-semibold flex items-center justify-center ${
+                              isActive
+                                ? "bg-teal-600 text-white"
+                                : "bg-gray-100 text-gray-400"
+                            }`}
+                          >
+                            {isActive ? mandaysPerDay.toFixed(1) : ""}
+                          </div>
+                        )}
                       </td>
                     );
                   })}
@@ -302,26 +357,28 @@ export default function LaborGanttChart({
         </table>
       </div>
 
-      <div className="flex items-center gap-3">
-        <button
-          onClick={saveSchedule}
-          disabled={saving || !dirty}
-          className="bg-teal-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {saving ? "Saving..." : "Save Schedule"}
-        </button>
-        {dirty && (
+      {canEdit && (
+        <div className="flex items-center gap-3">
           <button
-            onClick={loadSchedule}
-            className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300"
+            onClick={saveSchedule}
+            disabled={saving || !dirty}
+            className="bg-teal-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Reset
+            {saving ? "Saving..." : "Save Schedule"}
           </button>
-        )}
-        {dirty && (
-          <span className="text-xs text-amber-600 font-medium">Unsaved changes</span>
-        )}
-      </div>
+          {dirty && (
+            <button
+              onClick={loadSchedule}
+              className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300"
+            >
+              Reset
+            </button>
+          )}
+          {dirty && (
+            <span className="text-xs text-amber-600 font-medium">Unsaved changes</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

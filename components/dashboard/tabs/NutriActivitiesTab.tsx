@@ -9,6 +9,7 @@ import {
   calculateWeeksSinceSowing,
   NUTRI_ACTIVITY_COLUMNS,
 } from "../DashboardContext";
+import { hasPermission, Permission } from "@/lib/auth/roles";
 
 interface Override {
   id: number;
@@ -27,7 +28,10 @@ export default function NutriActivitiesTab() {
     selectedMonday,
     selectedWeek,
     farmSummaries,
+    user,
   } = useDashboard();
+
+  const canEditGantt = !!user && hasPermission(user.role, Permission.EDIT_GANTT);
 
   const [selectedNutriFarm, setSelectedNutriFarm] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Override[]>([]);
@@ -288,6 +292,7 @@ export default function NutriActivitiesTab() {
               activities={ganttActivities}
               weekStartDate={selectedMonday}
               farmPhaseIds={farmPhaseIds}
+              canEdit={canEditGantt}
               onRemoveActivity={handleRemoveActivity}
               onAddActivity={handleAddActivity}
               onUndoOverride={handleUndoOverride}
