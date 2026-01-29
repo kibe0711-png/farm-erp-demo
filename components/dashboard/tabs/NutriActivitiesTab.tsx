@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DataTable from "@/components/DataTable";
 import WeekSelector from "../WeekSelector";
+import NutriGanttChart, { type NutriGanttActivity } from "./NutriGanttChart";
 import {
   useDashboard,
   calculateWeeksSinceSowing,
@@ -29,6 +30,23 @@ export default function NutriActivitiesTab() {
           weeksSinceSowing: calculateWeeksSinceSowing(phase.sowingDate, selectedMonday),
         }))
     : [];
+
+  // Build Gantt activities with SOP ID and farmPhaseId
+  const ganttActivities: NutriGanttActivity[] = nutriFarmPhases.flatMap((phase) => {
+    const weekNum = phase.weeksSinceSowing;
+    if (weekNum < 0) return [];
+    const matchingSop = nutriSop.filter(
+      (sop) => sop.cropCode === phase.cropCode && sop.week === weekNum
+    );
+    const areaHa = parseFloat(String(phase.areaHa)) || 0;
+    return matchingSop.map((sop) => ({
+      key: `${phase.id}-${sop.id}`,
+      label: `${phase.phaseId} W${weekNum} - ${sop.products}`,
+      farmPhaseId: phase.id,
+      sopId: sop.id,
+      totalQuantity: (parseFloat(String(sop.rateHa)) || 0) * areaHa,
+    }));
+  });
 
   const nutriActivities = nutriFarmPhases.flatMap((phase) => {
     const weekNum = phase.weeksSinceSowing;
@@ -57,6 +75,8 @@ export default function NutriActivitiesTab() {
       };
     });
   });
+
+  const farmPhaseIds = nutriFarmPhases.map((p) => p.id);
 
   return (
     <div className="space-y-6">
@@ -118,45 +138,14 @@ export default function NutriActivitiesTab() {
           </div>
 
           <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Phases</h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-2 px-2 font-medium text-gray-600">Phase</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-600">Crop</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-600">Sowing Date</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-600">Area (Ha)</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-600">Week</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {nutriFarmPhases.map((phase) => (
-                    <tr key={phase.id} className="border-b border-gray-100">
-                      <td className="py-2 px-2">{phase.phaseId}</td>
-                      <td className="py-2 px-2">{phase.cropCode}</td>
-                      <td className="py-2 px-2">
-                        {new Date(phase.sowingDate).toLocaleDateString("en-GB")}
-                      </td>
-                      <td className="py-2 px-2">
-                        {parseFloat(String(phase.areaHa)).toFixed(2)}
-                      </td>
-                      <td className="py-2 px-2">
-                        <span
-                          className={
-                            phase.weeksSinceSowing < 0
-                              ? "text-gray-400"
-                              : "text-purple-600 font-medium"
-                          }
-                        >
-                          {phase.weeksSinceSowing}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">
+              Weekly Schedule — Week {selectedWeek}
+            </h3>
+            <NutriGanttChart
+              activities={ganttActivities}
+              weekStartDate={selectedMonday}
+              farmPhaseIds={farmPhaseIds}
+            />
           </div>
 
           <div>
