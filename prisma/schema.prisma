@@ -110,6 +110,19 @@ model LaborSchedule {
   @@map("labor_schedules")
 }
 
+model PhaseActivityOverride {
+  id          Int      @id @default(autoincrement())
+  farmPhaseId Int      @map("farm_phase_id")
+  sopId       Int      @map("sop_id")
+  sopType     String   @map("sop_type") @db.VarChar(10)
+  action      String   @db.VarChar(10)
+  weekStart   DateTime @map("week_start") @db.Date
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([farmPhaseId, sopId, sopType, weekStart])
+  @@map("phase_activity_overrides")
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   email        String   @unique @db.VarChar(255)

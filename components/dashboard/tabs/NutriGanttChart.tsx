@@ -12,10 +12,24 @@ export interface NutriGanttActivity {
   totalQuantity: number;
 }
 
+interface Override {
+  id: number;
+  farmPhaseId: number;
+  sopId: number;
+  sopType: string;
+  action: string;
+  weekStart: string;
+}
+
 interface Props {
   activities: NutriGanttActivity[];
   weekStartDate: Date;
   farmPhaseIds: number[];
+  onRemoveActivity?: (key: string) => void;
+  onAddActivity?: (sopId: number, farmPhaseId: number) => void;
+  onUndoOverride?: (key: string) => void;
+  availableActivities?: { sopId: number; farmPhaseId: number; label: string }[];
+  overrides?: Override[];
 }
 
 interface ScheduleEntry {
@@ -24,13 +38,31 @@ interface ScheduleEntry {
   dayOfWeek: number;
 }
 
-export default function NutriGanttChart({ activities, weekStartDate, farmPhaseIds }: Props) {
+export default function NutriGanttChart({
+  activities,
+  weekStartDate,
+  farmPhaseIds,
+  onRemoveActivity,
+  onAddActivity,
+  onUndoOverride,
+  availableActivities,
+  overrides,
+}: Props) {
   const [toggled, setToggled] = useState<Record<string, Set<number>>>({});
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [showAddDropdown, setShowAddDropdown] = useState(false);
 
   const weekStr = weekStartDate.toISOString().split("T")[0];
+
+  const getOverrideForActivity = (key: string): Override | undefined => {
+    if (!overrides) return undefined;
+    const [farmPhaseId, sopId] = key.split("-").map(Number);
+    return overrides.find(
+      (o) => o.farmPhaseId === farmPhaseId && o.sopId === sopId
+    );
+  };
 
   const loadSchedule = useCallback(async () => {
     if (farmPhaseIds.length === 0) return;
@@ -129,7 +161,7 @@ export default function NutriGanttChart({ activities, weekStartDate, farmPhaseId
     );
   }
 
-  if (activities.length === 0) {
+  if (activities.length === 0 && (!availableActivities || availableActivities.length === 0)) {
     return (
       <div className="text-sm text-gray-500 py-4">No nutrition activities for this week.</div>
     );
@@ -137,6 +169,34 @@ export default function NutriGanttChart({ activities, weekStartDate, farmPhaseId
 
   return (
     <div className="space-y-3">
+      {/* Add Activity button */}
+      {onAddActivity && availableActivities && availableActivities.length > 0 && (
+        <div className="flex justify-end relative">
+          <button
+            onClick={() => setShowAddDropdown(!showAddDropdown)}
+            className="bg-purple-50 text-purple-700 border border-purple-200 px-3 py-1.5 rounded text-sm font-medium hover:bg-purple-100"
+          >
+            + Add Activity
+          </button>
+          {showAddDropdown && (
+            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto min-w-[280px]">
+              {availableActivities.map((item) => (
+                <button
+                  key={`${item.farmPhaseId}-${item.sopId}`}
+                  onClick={() => {
+                    onAddActivity(item.sopId, item.farmPhaseId);
+                    setShowAddDropdown(false);
+                  }}
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-purple-50 border-b border-gray-100 last:border-0"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm border-collapse">
           <thead>
@@ -160,11 +220,38 @@ export default function NutriGanttChart({ activities, weekStartDate, farmPhaseId
               const qtyPerDay = getQtyPerDay(act.key, act.totalQuantity);
               const prevAct = idx > 0 ? activities[idx - 1] : null;
               const isNewPhase = !prevAct || prevAct.farmPhaseId !== act.farmPhaseId;
+              const override = getOverrideForActivity(act.key);
+              const isAdded = override?.action === "add";
 
               return (
                 <tr key={act.key} className={`border-b border-gray-100 ${isNewPhase && idx > 0 ? "border-t-2 border-t-gray-300" : ""}`}>
                   <td className="py-2 px-3 text-gray-800 font-medium text-xs">
-                    {act.label}
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1">{act.label}</span>
+                      {isAdded && (
+                        <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium">
+                          added
+                        </span>
+                      )}
+                      {onRemoveActivity && !isAdded && (
+                        <button
+                          onClick={() => onRemoveActivity(act.key)}
+                          className="text-red-400 hover:text-red-600 text-xs font-bold shrink-0"
+                          title="Remove activity from this week"
+                        >
+                          x
+                        </button>
+                      )}
+                      {isAdded && onUndoOverride && (
+                        <button
+                          onClick={() => onUndoOverride(act.key)}
+                          className="text-gray-400 hover:text-gray-600 text-xs shrink-0"
+                          title="Undo add"
+                        >
+                          undo
+                        </button>
+                      )}
+                    </div>
                   </td>
                   {DAY_LABELS.map((_, dayIdx) => {
                     const isActive = days.has(dayIdx);
@@ -218,6 +305,14 @@ export default function NutriGanttChart({ activities, weekStartDate, farmPhaseId
         >
           {saving ? "Saving..." : "Save Schedule"}
         </button>
+        {dirty && (
+          <button
+            onClick={loadSchedule}
+            className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300"
+          >
+            Reset
+          </button>
+        )}
         {dirty && (
           <span className="text-xs text-amber-600 font-medium">Unsaved changes</span>
         )}

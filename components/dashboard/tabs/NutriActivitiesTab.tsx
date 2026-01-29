@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import DataTable from "@/components/DataTable";
 import WeekSelector from "../WeekSelector";
 import NutriGanttChart, { type NutriGanttActivity } from "./NutriGanttChart";
@@ -9,6 +9,15 @@ import {
   calculateWeeksSinceSowing,
   NUTRI_ACTIVITY_COLUMNS,
 } from "../DashboardContext";
+
+interface Override {
+  id: number;
+  farmPhaseId: number;
+  sopId: number;
+  sopType: string;
+  action: string;
+  weekStart: string;
+}
 
 export default function NutriActivitiesTab() {
   const {
@@ -21,6 +30,9 @@ export default function NutriActivitiesTab() {
   } = useDashboard();
 
   const [selectedNutriFarm, setSelectedNutriFarm] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<Override[]>([]);
+
+  const weekStr = selectedMonday.toISOString().split("T")[0];
 
   const nutriFarmPhases = selectedNutriFarm
     ? phases
@@ -31,22 +43,155 @@ export default function NutriActivitiesTab() {
         }))
     : [];
 
-  // Build Gantt activities with SOP ID and farmPhaseId
-  const ganttActivities: NutriGanttActivity[] = nutriFarmPhases.flatMap((phase) => {
-    const weekNum = phase.weeksSinceSowing;
-    if (weekNum < 0) return [];
-    const matchingSop = nutriSop.filter(
-      (sop) => sop.cropCode === phase.cropCode && sop.week === weekNum
+  const farmPhaseIds = nutriFarmPhases.map((p) => p.id);
+
+  // Fetch overrides when farm or week changes
+  const fetchOverrides = useCallback(async () => {
+    if (farmPhaseIds.length === 0) {
+      setOverrides([]);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/phase-overrides?farmPhaseIds=${farmPhaseIds.join(",")}&weekStart=${weekStr}&sopType=nutri`
+      );
+      if (res.ok) {
+        setOverrides(await res.json());
+      }
+    } catch (error) {
+      console.error("Failed to fetch overrides:", error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNutriFarm, weekStr, farmPhaseIds.join(",")]);
+
+  useEffect(() => {
+    fetchOverrides();
+  }, [fetchOverrides]);
+
+  // Build Gantt activities with overrides applied
+  const ganttActivities: NutriGanttActivity[] = (() => {
+    const defaultActivities: NutriGanttActivity[] = nutriFarmPhases.flatMap((phase) => {
+      const weekNum = phase.weeksSinceSowing;
+      if (weekNum < 0) return [];
+      const matchingSop = nutriSop.filter(
+        (sop) => sop.cropCode === phase.cropCode && sop.week === weekNum
+      );
+      const areaHa = parseFloat(String(phase.areaHa)) || 0;
+      return matchingSop.map((sop) => ({
+        key: `${phase.id}-${sop.id}`,
+        label: `${phase.phaseId} W${weekNum} - ${sop.products}`,
+        farmPhaseId: phase.id,
+        sopId: sop.id,
+        totalQuantity: (parseFloat(String(sop.rateHa)) || 0) * areaHa,
+      }));
+    });
+
+    // Apply "remove" overrides
+    const removeSet = new Set(
+      overrides
+        .filter((o) => o.action === "remove")
+        .map((o) => `${o.farmPhaseId}-${o.sopId}`)
     );
-    const areaHa = parseFloat(String(phase.areaHa)) || 0;
-    return matchingSop.map((sop) => ({
-      key: `${phase.id}-${sop.id}`,
-      label: `${phase.phaseId} W${weekNum} - ${sop.products}`,
-      farmPhaseId: phase.id,
-      sopId: sop.id,
-      totalQuantity: (parseFloat(String(sop.rateHa)) || 0) * areaHa,
-    }));
-  });
+    const filtered = defaultActivities.filter((a) => !removeSet.has(a.key));
+
+    // Apply "add" overrides
+    const addOverrides = overrides.filter((o) => o.action === "add");
+    const existingKeys = new Set(filtered.map((a) => a.key));
+
+    addOverrides.forEach((o) => {
+      const key = `${o.farmPhaseId}-${o.sopId}`;
+      if (existingKeys.has(key)) return;
+
+      const sop = nutriSop.find((s) => s.id === o.sopId);
+      const phase = nutriFarmPhases.find((p) => p.id === o.farmPhaseId);
+      if (!sop || !phase) return;
+
+      const areaHa = parseFloat(String(phase.areaHa)) || 0;
+      filtered.push({
+        key,
+        label: `${phase.phaseId} W${sop.week} - ${sop.products}`,
+        farmPhaseId: phase.id,
+        sopId: sop.id,
+        totalQuantity: (parseFloat(String(sop.rateHa)) || 0) * areaHa,
+      });
+    });
+
+    return filtered;
+  })();
+
+  // Available SOPs for adding (those not already in the Gantt)
+  const availableToAdd = (() => {
+    const currentKeys = new Set(ganttActivities.map((a) => a.key));
+    const available: { sopId: number; farmPhaseId: number; label: string }[] = [];
+
+    nutriFarmPhases.forEach((phase) => {
+      const allSopsForCrop = nutriSop.filter((sop) => sop.cropCode === phase.cropCode);
+      allSopsForCrop.forEach((sop) => {
+        const key = `${phase.id}-${sop.id}`;
+        if (!currentKeys.has(key)) {
+          available.push({
+            sopId: sop.id,
+            farmPhaseId: phase.id,
+            label: `${phase.phaseId} W${sop.week} - ${sop.products}`,
+          });
+        }
+      });
+    });
+
+    return available;
+  })();
+
+  const handleRemoveActivity = async (activityKey: string) => {
+    const [farmPhaseId, sopId] = activityKey.split("-").map(Number);
+    try {
+      await fetch("/api/phase-overrides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          farmPhaseId,
+          sopId,
+          sopType: "nutri",
+          action: "remove",
+          weekStart: weekStr,
+        }),
+      });
+      fetchOverrides();
+    } catch (error) {
+      console.error("Failed to remove activity:", error);
+    }
+  };
+
+  const handleAddActivity = async (sopId: number, farmPhaseId: number) => {
+    try {
+      await fetch("/api/phase-overrides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          farmPhaseId,
+          sopId,
+          sopType: "nutri",
+          action: "add",
+          weekStart: weekStr,
+        }),
+      });
+      fetchOverrides();
+    } catch (error) {
+      console.error("Failed to add activity:", error);
+    }
+  };
+
+  const handleUndoOverride = async (activityKey: string) => {
+    const [farmPhaseId, sopId] = activityKey.split("-").map(Number);
+    try {
+      await fetch(
+        `/api/phase-overrides?farmPhaseId=${farmPhaseId}&sopId=${sopId}&sopType=nutri&weekStart=${weekStr}`,
+        { method: "DELETE" }
+      );
+      fetchOverrides();
+    } catch (error) {
+      console.error("Failed to undo override:", error);
+    }
+  };
 
   const nutriActivities = nutriFarmPhases.flatMap((phase) => {
     const weekNum = phase.weeksSinceSowing;
@@ -75,8 +220,6 @@ export default function NutriActivitiesTab() {
       };
     });
   });
-
-  const farmPhaseIds = nutriFarmPhases.map((p) => p.id);
 
   return (
     <div className="space-y-6">
@@ -145,6 +288,11 @@ export default function NutriActivitiesTab() {
               activities={ganttActivities}
               weekStartDate={selectedMonday}
               farmPhaseIds={farmPhaseIds}
+              onRemoveActivity={handleRemoveActivity}
+              onAddActivity={handleAddActivity}
+              onUndoOverride={handleUndoOverride}
+              availableActivities={availableToAdd}
+              overrides={overrides}
             />
           </div>
 
