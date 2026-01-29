@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { verifyToken } from "@/lib/jwt";
 
-export function proxy(request: NextRequest) {
-  const isAuthenticated = request.cookies.get("auth")?.value === "true";
-  const isLoginPage = request.nextUrl.pathname === "/";
-  const isApiAuth = request.nextUrl.pathname === "/api/auth";
+export async function proxy(request: NextRequest) {
+  const token = request.cookies.get("token")?.value;
+  const pathname = request.nextUrl.pathname;
 
-  if (isApiAuth) {
+  const isLoginPage = pathname === "/";
+  const isRegisterPage = pathname === "/register";
+  const isAuthApi = pathname.startsWith("/api/auth");
+
+  // Always allow auth APIs and register page
+  if (isAuthApi || isRegisterPage) {
     return NextResponse.next();
   }
+
+  const payload = token ? await verifyToken(token) : null;
+  const isAuthenticated = payload !== null;
 
   if (!isAuthenticated && !isLoginPage) {
     return NextResponse.redirect(new URL("/", request.url));

@@ -52,6 +52,12 @@ export interface FeedingRecord {
   notes: string | null;
 }
 
+export interface AuthUser {
+  id: number;
+  email: string;
+  name: string;
+}
+
 // ── Constants ──────────────────────────────────────────────────────
 export const PHASE_HEADERS = ["crop_code", "phase_id", "sowing_date", "farm", "area_ha"];
 export const LABOR_HEADERS = ["crop_code", "week", "task", "no_of_casuals", "cost_per_casual_day", "no_of_days"];
@@ -192,6 +198,10 @@ interface DashboardContextValue {
   handleFeedingSubmit: (form: { product: string; actualQty: string; applicationDate: string; notes: string }, phase: Phase) => Promise<void>;
   handleDeleteFeedingRecord: (id: number) => Promise<void>;
 
+  // User
+  user: AuthUser | null;
+  userName: string;
+
   // Logout
   handleLogout: () => Promise<void>;
 }
@@ -210,6 +220,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [nutriSop, setNutriSop] = useState<NutriSopItem[]>([]);
   const [feedingRecords, setFeedingRecords] = useState<FeedingRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   const currentWeekInfo = getCurrentWeekInfo();
   const [selectedYear, setSelectedYear] = useState(currentWeekInfo.year);
@@ -268,13 +279,27 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Fetch current user
+  const fetchUser = useCallback(async () => {
+    try {
+      const res = await fetch("/api/auth/me");
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user);
+      }
+    } catch (error) {
+      console.error("Failed to fetch user:", error);
+    }
+  }, []);
+
   // Initial fetch
   useEffect(() => {
+    fetchUser();
     fetchPhases();
     fetchLaborSop();
     fetchNutriSop();
     fetchFeedingRecords();
-  }, [fetchPhases, fetchLaborSop, fetchNutriSop, fetchFeedingRecords]);
+  }, [fetchUser, fetchPhases, fetchLaborSop, fetchNutriSop, fetchFeedingRecords]);
 
   // ── Upload handlers ──────────────────────────────────────────────
   const handlePhaseUpload = async (data: Record<string, string>[]) => {
@@ -368,9 +393,12 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     fetchFeedingRecords();
   };
 
+  const userName = user?.name ?? "";
+
   // ── Logout ───────────────────────────────────────────────────────
   const handleLogout = async () => {
     await fetch("/api/auth", { method: "DELETE" });
+    setUser(null);
     window.location.href = "/";
   };
 
@@ -460,6 +488,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         handleClearNutri,
         handleFeedingSubmit,
         handleDeleteFeedingRecord,
+        user,
+        userName,
         handleLogout,
       }}
     >

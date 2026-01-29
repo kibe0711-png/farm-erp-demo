@@ -16,7 +16,7 @@ const DATA_ITEMS: { id: SidebarTab; label: string }[] = [
 ];
 
 export default function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
-  const { handleLogout } = useDashboard();
+  const { handleLogout, userName } = useDashboard();
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 flex flex-col z-30">
@@ -62,8 +62,11 @@ export default function Sidebar({ activeSection, onSectionChange }: SidebarProps
         </button>
       </nav>
 
-      {/* Logout */}
+      {/* User + Logout */}
       <div className="border-t border-gray-200 p-4">
+        {userName && (
+          <p className="text-sm font-medium text-gray-900 mb-2 px-2">{userName}</p>
+        )}
         <button
           onClick={handleLogout}
           className="w-full text-left text-sm text-gray-600 hover:text-gray-900 py-2 px-2 rounded-lg hover:bg-gray-50 transition-colors"

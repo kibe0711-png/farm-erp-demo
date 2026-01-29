@@ -59,3 +59,13 @@ model FeedingRecord {
 
   @@map("feeding_records")
 }
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique @db.VarChar(255)
+  name      String   @db.VarChar(100)
+  password  String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("users")
+}
