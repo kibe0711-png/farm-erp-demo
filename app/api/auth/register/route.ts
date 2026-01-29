@@ -39,11 +39,13 @@ export async function POST(request: Request) {
       userId: user.id,
       email: user.email,
       name: user.name,
+      role: user.role,
+      tokenVersion: user.tokenVersion,
     });
 
     const response = NextResponse.json({
       success: true,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: { id: user.id, email: user.email, name: user.name, role: user.role },
     });
 
     response.cookies.set("token", token, {

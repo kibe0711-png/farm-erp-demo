@@ -111,11 +111,14 @@ model LaborSchedule {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique @db.VarChar(255)
-  name      String   @db.VarChar(100)
-  password  String   @db.Text
-  createdAt DateTime @default(now()) @map("created_at")
+  id           Int      @id @default(autoincrement())
+  email        String   @unique @db.VarChar(255)
+  name         String   @db.VarChar(100)
+  password     String   @db.Text
+  role         String   @default("FARM_CLERK") @db.VarChar(30)
+  status       String   @default("ACTIVE") @db.VarChar(20)
+  tokenVersion Int      @default(0) @map("token_version")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   @@map("users")
 }
