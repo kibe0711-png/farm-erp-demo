@@ -72,7 +72,7 @@ function calculatePhaseForecast(
       return 0;
     }
 
-    const distribution = getWeekDistribution(keyInput, harvestWeekIndex);
+    const distribution = getWeekDistribution(keyInput, harvestWeekIndex) / 100;
     return areaHa * yieldPerHa * distribution * (1 - rejectRate / 100);
   });
 }
@@ -83,7 +83,6 @@ export default function IPPView() {
   const { phases, keyInputs, selectedMonday, selectedYear, selectedWeek } =
     useDashboard();
 
-  const [expandedFarms, setExpandedFarms] = useState<Set<string>>(new Set());
   const [expandedCrops, setExpandedCrops] = useState<Set<string>>(new Set());
 
   // 8 forecast week columns
@@ -185,26 +184,6 @@ export default function IPPView() {
 
   // ── Toggle handlers ────────────────────────────────────────────
 
-  const toggleFarm = (farm: string) => {
-    setExpandedFarms((prev) => {
-      const next = new Set(prev);
-      if (next.has(farm)) {
-        next.delete(farm);
-        // collapse child crops too
-        setExpandedCrops((prevCrops) => {
-          const nextCrops = new Set(prevCrops);
-          for (const key of prevCrops) {
-            if (key.startsWith(`${farm}:`)) nextCrops.delete(key);
-          }
-          return nextCrops;
-        });
-      } else {
-        next.add(farm);
-      }
-      return next;
-    });
-  };
-
   const toggleCrop = (farm: string, cropCode: string) => {
     const key = `${farm}:${cropCode}`;
     setExpandedCrops((prev) => {
@@ -260,7 +239,7 @@ export default function IPPView() {
         </div>
       </div>
 
-      {/* Main table */}
+      {/* Farm cards */}
       {phases.length === 0 || keyInputs.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
           <p className="text-gray-500">
@@ -270,146 +249,158 @@ export default function IPPView() {
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-gray-300 bg-gray-50">
-                  <th className="text-left py-2 px-3 font-medium text-gray-700 min-w-[200px]">
-                    Farm / Crop / Phase
-                  </th>
-                  {weekColumns.map((wc) => (
-                    <th
-                      key={wc.weekNumber}
-                      className="text-right py-2 px-3 font-medium text-gray-700 min-w-[100px]"
-                    >
-                      {wc.label}
-                    </th>
-                  ))}
-                  <th className="text-right py-2 px-3 font-medium text-gray-700 min-w-[100px] bg-gray-100">
-                    Total
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {farmAggregates.map((fa) => {
-                  const isFarmExpanded = expandedFarms.has(fa.farm);
-                  return (
-                    <Fragment key={fa.farm}>
-                      {/* Farm row */}
-                      <tr
-                        onClick={() => toggleFarm(fa.farm)}
-                        className="border-b border-gray-200 bg-emerald-50 cursor-pointer hover:bg-emerald-100 transition-colors"
-                      >
-                        <td className="py-2.5 px-3 font-semibold text-gray-900">
-                          <span className="mr-2 text-gray-400">
-                            {isFarmExpanded ? "\u25BE" : "\u25B8"}
-                          </span>
-                          {fa.farm}
-                        </td>
-                        {fa.weeklyTons.map((t, i) => (
-                          <td
-                            key={i}
-                            className="py-2.5 px-3 text-right font-semibold text-gray-900 tabular-nums"
-                          >
-                            {formatTons(t)}
-                          </td>
-                        ))}
-                        <td className="py-2.5 px-3 text-right font-bold text-emerald-700 bg-emerald-100 tabular-nums">
-                          {formatTons(rowTotal(fa.weeklyTons))}
-                        </td>
-                      </tr>
+        <>
+          {farmAggregates.map((fa) => (
+            <div
+              key={fa.farm}
+              className="bg-white rounded-lg border border-gray-200 overflow-hidden"
+            >
+              {/* Farm header */}
+              <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-3 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {fa.farm}
+                </h3>
+                <span className="text-sm font-bold text-emerald-700">
+                  {formatTons(rowTotal(fa.weeklyTons))} T
+                </span>
+              </div>
 
-                      {/* Crop rows */}
-                      {isFarmExpanded &&
-                        fa.crops.map((ca) => {
-                          const cropKey = `${fa.farm}:${ca.cropCode}`;
-                          const isCropExpanded = expandedCrops.has(cropKey);
-                          return (
-                            <Fragment key={cropKey}>
-                              <tr
-                                onClick={() =>
-                                  toggleCrop(fa.farm, ca.cropCode)
-                                }
-                                className="border-b border-gray-100 bg-white cursor-pointer hover:bg-gray-50 transition-colors"
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-300 bg-gray-50">
+                      <th className="text-left py-2 px-3 font-medium text-gray-700 min-w-[200px]">
+                        Crop / Phase
+                      </th>
+                      {weekColumns.map((wc) => (
+                        <th
+                          key={wc.weekNumber}
+                          className="text-right py-2 px-3 font-medium text-gray-700 min-w-[100px]"
+                        >
+                          {wc.label}
+                        </th>
+                      ))}
+                      <th className="text-right py-2 px-3 font-medium text-gray-700 min-w-[100px] bg-gray-100">
+                        Total
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fa.crops.map((ca) => {
+                      const cropKey = `${fa.farm}:${ca.cropCode}`;
+                      const isCropExpanded = expandedCrops.has(cropKey);
+                      return (
+                        <Fragment key={cropKey}>
+                          {/* Crop row */}
+                          <tr
+                            onClick={() =>
+                              toggleCrop(fa.farm, ca.cropCode)
+                            }
+                            className="border-b border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors"
+                          >
+                            <td className="py-2 px-3 font-medium text-gray-800">
+                              <span className="mr-2 text-gray-400">
+                                {isCropExpanded ? "\u25BE" : "\u25B8"}
+                              </span>
+                              {ca.cropCode}
+                              <span className="text-xs text-gray-400 ml-2">
+                                ({ca.phases.length} phase
+                                {ca.phases.length !== 1 ? "s" : ""})
+                              </span>
+                            </td>
+                            {ca.weeklyTons.map((t, i) => (
+                              <td
+                                key={i}
+                                className="py-2 px-3 text-right text-gray-700 tabular-nums"
                               >
-                                <td className="py-2 px-3 pl-8 font-medium text-gray-800">
-                                  <span className="mr-2 text-gray-400">
-                                    {isCropExpanded ? "\u25BE" : "\u25B8"}
-                                  </span>
-                                  {ca.cropCode}
-                                  <span className="text-xs text-gray-400 ml-2">
-                                    ({ca.phases.length} phase
-                                    {ca.phases.length !== 1 ? "s" : ""})
+                                {formatTons(t)}
+                              </td>
+                            ))}
+                            <td className="py-2 px-3 text-right font-semibold text-gray-800 bg-gray-50 tabular-nums">
+                              {formatTons(rowTotal(ca.weeklyTons))}
+                            </td>
+                          </tr>
+
+                          {/* Phase rows */}
+                          {isCropExpanded &&
+                            ca.phases.map((pf) => (
+                              <tr
+                                key={`${cropKey}:${pf.phaseId}`}
+                                className="border-b border-gray-50 bg-gray-50"
+                              >
+                                <td className="py-1.5 px-3 pl-10 text-gray-500 text-xs">
+                                  {pf.phaseId}
+                                  <span className="text-gray-400 ml-2">
+                                    ({pf.areaHa.toFixed(2)} Ha)
                                   </span>
                                 </td>
-                                {ca.weeklyTons.map((t, i) => (
+                                {pf.weeklyTons.map((t, i) => (
                                   <td
                                     key={i}
-                                    className="py-2 px-3 text-right text-gray-700 tabular-nums"
+                                    className="py-1.5 px-3 text-right text-gray-500 text-xs tabular-nums"
                                   >
                                     {formatTons(t)}
                                   </td>
                                 ))}
-                                <td className="py-2 px-3 text-right font-semibold text-gray-800 bg-gray-50 tabular-nums">
-                                  {formatTons(rowTotal(ca.weeklyTons))}
+                                <td className="py-1.5 px-3 text-right text-gray-600 text-xs font-medium bg-gray-100 tabular-nums">
+                                  {formatTons(rowTotal(pf.weeklyTons))}
                                 </td>
                               </tr>
+                            ))}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                  {/* Farm total footer */}
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-300 bg-emerald-50">
+                      <td className="py-2 px-3 font-bold text-gray-900 text-xs">
+                        Farm Total
+                      </td>
+                      {fa.weeklyTons.map((t, i) => (
+                        <td
+                          key={i}
+                          className="py-2 px-3 text-right font-bold text-emerald-800 tabular-nums text-xs"
+                        >
+                          {formatTons(t)}
+                        </td>
+                      ))}
+                      <td className="py-2 px-3 text-right font-bold text-emerald-900 bg-emerald-100 tabular-nums text-xs">
+                        {formatTons(rowTotal(fa.weeklyTons))}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          ))}
 
-                              {/* Phase rows */}
-                              {isCropExpanded &&
-                                ca.phases.map((pf) => (
-                                  <tr
-                                    key={`${cropKey}:${pf.phaseId}`}
-                                    className="border-b border-gray-50 bg-gray-50"
-                                  >
-                                    <td className="py-1.5 px-3 pl-14 text-gray-500 text-xs">
-                                      {pf.phaseId}
-                                      <span className="text-gray-400 ml-2">
-                                        ({pf.areaHa.toFixed(2)} Ha)
-                                      </span>
-                                    </td>
-                                    {pf.weeklyTons.map((t, i) => (
-                                      <td
-                                        key={i}
-                                        className="py-1.5 px-3 text-right text-gray-500 text-xs tabular-nums"
-                                      >
-                                        {formatTons(t)}
-                                      </td>
-                                    ))}
-                                    <td className="py-1.5 px-3 text-right text-gray-600 text-xs font-medium bg-gray-100 tabular-nums">
-                                      {formatTons(rowTotal(pf.weeklyTons))}
-                                    </td>
-                                  </tr>
-                                ))}
-                            </Fragment>
-                          );
-                        })}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-gray-300 bg-emerald-100">
-                  <td className="py-3 px-3 font-bold text-gray-900">
-                    Grand Total
-                  </td>
-                  {grandTotalWeekly.map((t: number, i: number) => (
-                    <td
-                      key={i}
-                      className="py-3 px-3 text-right font-bold text-emerald-800 tabular-nums"
-                    >
-                      {formatTons(t)}
+          {/* Grand total card */}
+          <div className="bg-emerald-100 rounded-lg border border-emerald-300 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm border-collapse">
+                <tbody>
+                  <tr>
+                    <td className="py-3 px-3 font-bold text-gray-900 min-w-[200px]">
+                      Grand Total
                     </td>
-                  ))}
-                  <td className="py-3 px-3 text-right font-bold text-emerald-900 bg-emerald-200 tabular-nums">
-                    {formatTons(grandTotal8w)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+                    {grandTotalWeekly.map((t: number, i: number) => (
+                      <td
+                        key={i}
+                        className="py-3 px-3 text-right font-bold text-emerald-800 tabular-nums min-w-[100px]"
+                      >
+                        {formatTons(t)}
+                      </td>
+                    ))}
+                    <td className="py-3 px-3 text-right font-bold text-emerald-900 bg-emerald-200 tabular-nums min-w-[100px]">
+                      {formatTons(grandTotal8w)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Legend */}
