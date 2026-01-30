@@ -86,6 +86,7 @@ const FARM_MANAGER_PERMS: PermissionType[] = [
   Permission.APPROVE_FEEDINGS,
   Permission.EDIT_PAST_RECORDS,
   Permission.EXPORT_DATA,
+  Permission.MANAGE_CROPS,
 ];
 
 const ALL_PERMS: PermissionType[] = Object.values(Permission);

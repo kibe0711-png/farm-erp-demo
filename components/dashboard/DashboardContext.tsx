@@ -228,6 +228,11 @@ interface DashboardContextValue {
   user: AuthUser | null;
   userName: string;
 
+  // Phase CRUD
+  handleUpdatePhase: (id: number, updates: Partial<Phase>) => Promise<void>;
+  handleDeletePhase: (id: number) => Promise<void>;
+  handleAddPhase: (phase: Omit<Phase, "id">) => Promise<void>;
+
   // Logout
   handleLogout: () => Promise<void>;
 }
@@ -484,6 +489,42 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     fetchLaborLogs();
   };
 
+  // ── Phase CRUD handlers ────────────────────────────────────────
+  const handleUpdatePhase = async (id: number, updates: Partial<Phase>) => {
+    const res = await fetch("/api/phases", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...updates }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || "Failed to update phase");
+    }
+    fetchPhases();
+    fetchFarms();
+  };
+
+  const handleDeletePhase = async (id: number) => {
+    if (!confirm("Delete this phase?")) return;
+    const res = await fetch(`/api/phases?id=${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete phase");
+    fetchPhases();
+  };
+
+  const handleAddPhase = async (phase: Omit<Phase, "id">) => {
+    const res = await fetch("/api/phases", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(phase),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || "Failed to add phase");
+    }
+    fetchPhases();
+    fetchFarms();
+  };
+
   const userName = user?.name ?? "";
 
   // ── Logout ───────────────────────────────────────────────────────
@@ -594,6 +635,9 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         handleDeleteFeedingRecord,
         handleLaborLogSubmit,
         handleDeleteLaborLog,
+        handleUpdatePhase,
+        handleDeletePhase,
+        handleAddPhase,
         user,
         userName,
         handleLogout,

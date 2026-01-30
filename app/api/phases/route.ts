@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth/getAuthUser";
+import { hasPermission, Permission } from "@/lib/auth/roles";
 
 function parseDate(dateStr: string): Date {
   if (!dateStr) return new Date();
@@ -36,6 +38,41 @@ export async function POST(request: Request) {
   try {
     const data = await request.json();
 
+    // Single phase creation (object) — requires MANAGE_CROPS
+    if (!Array.isArray(data) && typeof data === "object" && data !== null) {
+      const authUser = await getAuthUser();
+      if (!authUser || !hasPermission(authUser.role, Permission.MANAGE_CROPS)) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      }
+
+      const sowingDate = parseDate(data.sowingDate || "");
+      const areaHa = parseFloat(data.areaHa) || 0;
+
+      let farmId: number | null = null;
+      if (data.farm) {
+        const farmRecord = await prisma.farm.upsert({
+          where: { name: data.farm },
+          update: {},
+          create: { name: data.farm },
+        });
+        farmId = farmRecord.id;
+      }
+
+      const phase = await prisma.farmPhase.create({
+        data: {
+          cropCode: data.cropCode || "",
+          phaseId: data.phaseId || "",
+          sowingDate,
+          farm: data.farm || "",
+          farmId,
+          areaHa,
+        },
+      });
+
+      return NextResponse.json({ success: true, phase });
+    }
+
+    // Bulk CSV upload (array) — no auth change
     if (!Array.isArray(data) || data.length === 0) {
       return NextResponse.json({ error: "Invalid data format" }, { status: 400 });
     }
@@ -84,9 +121,66 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE() {
+export async function PATCH(request: Request) {
   try {
-    await prisma.farmPhase.deleteMany();
+    const authUser = await getAuthUser();
+    if (!authUser || !hasPermission(authUser.role, Permission.MANAGE_CROPS)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { id, cropCode, phaseId, sowingDate, farm, areaHa } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Phase id is required" }, { status: 400 });
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (cropCode !== undefined) updateData.cropCode = cropCode;
+    if (phaseId !== undefined) updateData.phaseId = phaseId;
+    if (sowingDate !== undefined) updateData.sowingDate = parseDate(sowingDate);
+    if (farm !== undefined) {
+      updateData.farm = farm;
+      const farmRecord = await prisma.farm.upsert({
+        where: { name: farm },
+        update: {},
+        create: { name: farm },
+      });
+      updateData.farmId = farmRecord.id;
+    }
+    if (areaHa !== undefined) updateData.areaHa = parseFloat(areaHa) || 0;
+
+    const phase = await prisma.farmPhase.update({
+      where: { id: Number(id) },
+      data: updateData,
+    });
+
+    return NextResponse.json(phase);
+  } catch (error) {
+    console.error("Failed to update phase:", error);
+    return NextResponse.json({ error: "Failed to update phase" }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (id) {
+      // Single phase deletion — requires MANAGE_CROPS
+      const authUser = await getAuthUser();
+      if (!authUser || !hasPermission(authUser.role, Permission.MANAGE_CROPS)) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      }
+      await prisma.farmPhase.delete({
+        where: { id: parseInt(id) },
+      });
+    } else {
+      // Bulk delete all (existing behavior)
+      await prisma.farmPhase.deleteMany();
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to delete phases:", error);
