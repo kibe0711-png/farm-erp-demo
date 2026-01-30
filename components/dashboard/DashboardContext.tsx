@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 
 // ── Types ──────────────────────────────────────────────────────────
 export interface Phase {
@@ -60,6 +60,13 @@ export interface LaborLogRecord {
   casuals: number;
   costPerDay: string | number;
   totalCost: string | number;
+  notes: string | null;
+}
+
+export interface HarvestLogRecord {
+  id: number;
+  farmPhaseId: number;
+  logDate: string;
   notes: string | null;
 }
 
@@ -242,6 +249,7 @@ interface DashboardContextValue {
   keyInputs: KeyInputItem[];
   feedingRecords: FeedingRecord[];
   laborLogs: LaborLogRecord[];
+  harvestLogs: HarvestLogRecord[];
   farms: FarmItem[];
   loading: boolean;
 
@@ -264,6 +272,7 @@ interface DashboardContextValue {
   fetchKeyInputs: () => Promise<void>;
   fetchFeedingRecords: () => Promise<void>;
   fetchLaborLogs: () => Promise<void>;
+  fetchHarvestLogs: () => Promise<void>;
   fetchFarms: () => Promise<void>;
 
   // Upload handlers
@@ -285,6 +294,10 @@ interface DashboardContextValue {
   // Labor Logs
   handleLaborLogSubmit: (form: { task: string; casuals: string; logDate: string; notes: string }, phase: Phase) => Promise<void>;
   handleDeleteLaborLog: (id: number) => Promise<void>;
+
+  // Harvest Logs
+  handleHarvestLogSubmit: (form: { logDate: string; notes: string }, phase: Phase) => Promise<void>;
+  handleDeleteHarvestLog: (id: number) => Promise<void>;
 
   // User
   user: AuthUser | null;
@@ -313,6 +326,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [nutriSop, setNutriSop] = useState<NutriSopItem[]>([]);
   const [feedingRecords, setFeedingRecords] = useState<FeedingRecord[]>([]);
   const [laborLogs, setLaborLogs] = useState<LaborLogRecord[]>([]);
+  const [harvestLogs, setHarvestLogs] = useState<HarvestLogRecord[]>([]);
   const [keyInputs, setKeyInputs] = useState<KeyInputItem[]>([]);
   const [farms, setFarms] = useState<FarmItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -384,6 +398,15 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const fetchHarvestLogs = useCallback(async () => {
+    try {
+      const res = await fetch("/api/harvest-logs");
+      if (res.ok) setHarvestLogs(await res.json());
+    } catch (error) {
+      console.error("Failed to fetch harvest logs:", error);
+    }
+  }, []);
+
   const fetchKeyInputs = useCallback(async () => {
     setLoading(true);
     try {
@@ -427,11 +450,12 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     fetchKeyInputs();
     fetchFeedingRecords();
     fetchLaborLogs();
+    fetchHarvestLogs();
     fetchFarms();
-  }, [fetchUser, fetchPhases, fetchLaborSop, fetchNutriSop, fetchKeyInputs, fetchFeedingRecords, fetchLaborLogs, fetchFarms]);
+  }, [fetchUser, fetchPhases, fetchLaborSop, fetchNutriSop, fetchKeyInputs, fetchFeedingRecords, fetchLaborLogs, fetchHarvestLogs, fetchFarms]);
 
-  // ── Upload handlers ──────────────────────────────────────────────
-  const handlePhaseUpload = async (data: Record<string, string>[]) => {
+  // ── Upload handlers (stable refs) ───────────────────────────────
+  const handlePhaseUpload = useCallback(async (data: Record<string, string>[]) => {
     const res = await fetch("/api/phases", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -443,9 +467,9 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     }
     fetchPhases();
     fetchFarms();
-  };
+  }, [fetchPhases, fetchFarms]);
 
-  const handleLaborUpload = async (data: Record<string, string>[]) => {
+  const handleLaborUpload = useCallback(async (data: Record<string, string>[]) => {
     const res = await fetch("/api/labor-sop", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -456,9 +480,9 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       throw new Error(error.error || "Upload failed");
     }
     fetchLaborSop();
-  };
+  }, [fetchLaborSop]);
 
-  const handleNutriUpload = async (data: Record<string, string>[]) => {
+  const handleNutriUpload = useCallback(async (data: Record<string, string>[]) => {
     const res = await fetch("/api/nutri-sop", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -469,9 +493,9 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       throw new Error(error.error || "Upload failed");
     }
     fetchNutriSop();
-  };
+  }, [fetchNutriSop]);
 
-  const handleKeyInputsUpload = async (data: Record<string, string>[]) => {
+  const handleKeyInputsUpload = useCallback(async (data: Record<string, string>[]) => {
     const res = await fetch("/api/key-inputs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -482,35 +506,35 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       throw new Error(error.error || "Upload failed");
     }
     fetchKeyInputs();
-  };
+  }, [fetchKeyInputs]);
 
-  // ── Clear handlers ───────────────────────────────────────────────
-  const handleClearPhases = async () => {
+  // ── Clear handlers (stable refs) ──────────────────────────────
+  const handleClearPhases = useCallback(async () => {
     if (!confirm("Are you sure you want to delete all data in this section?")) return;
     const res = await fetch("/api/phases", { method: "DELETE" });
     if (res.ok) setPhases([]);
-  };
+  }, []);
 
-  const handleClearLabor = async () => {
+  const handleClearLabor = useCallback(async () => {
     if (!confirm("Are you sure you want to delete all data in this section?")) return;
     const res = await fetch("/api/labor-sop", { method: "DELETE" });
     if (res.ok) setLaborSop([]);
-  };
+  }, []);
 
-  const handleClearNutri = async () => {
+  const handleClearNutri = useCallback(async () => {
     if (!confirm("Are you sure you want to delete all data in this section?")) return;
     const res = await fetch("/api/nutri-sop", { method: "DELETE" });
     if (res.ok) setNutriSop([]);
-  };
+  }, []);
 
-  const handleClearKeyInputs = async () => {
+  const handleClearKeyInputs = useCallback(async () => {
     if (!confirm("Are you sure you want to delete all data in this section?")) return;
     const res = await fetch("/api/key-inputs", { method: "DELETE" });
     if (res.ok) setKeyInputs([]);
-  };
+  }, []);
 
-  // ── Feeding handlers ─────────────────────────────────────────────
-  const handleFeedingSubmit = async (
+  // ── Feeding handlers (stable refs) ────────────────────────────
+  const handleFeedingSubmit = useCallback(async (
     form: { product: string; actualQty: string; applicationDate: string; notes: string },
     phase: Phase
   ) => {
@@ -533,17 +557,17 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       throw new Error(error.error || "Failed to save record");
     }
     fetchFeedingRecords();
-  };
+  }, [fetchFeedingRecords]);
 
-  const handleDeleteFeedingRecord = async (id: number) => {
+  const handleDeleteFeedingRecord = useCallback(async (id: number) => {
     if (!confirm("Delete this feeding record?")) return;
     const res = await fetch(`/api/feeding?id=${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error("Failed to delete");
     fetchFeedingRecords();
-  };
+  }, [fetchFeedingRecords]);
 
-  // ── Labor Log handlers ─────────────────────────────────────────
-  const handleLaborLogSubmit = async (
+  // ── Labor Log handlers (stable refs) ──────────────────────────
+  const handleLaborLogSubmit = useCallback(async (
     form: { task: string; casuals: string; logDate: string; notes: string },
     phase: Phase
   ) => {
@@ -575,17 +599,46 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       throw new Error(error.error || "Failed to save record");
     }
     fetchLaborLogs();
-  };
+  }, [farms, fetchLaborLogs]);
 
-  const handleDeleteLaborLog = async (id: number) => {
+  const handleDeleteLaborLog = useCallback(async (id: number) => {
     if (!confirm("Delete this labor log?")) return;
     const res = await fetch(`/api/labor-logs?id=${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error("Failed to delete");
     fetchLaborLogs();
-  };
+  }, [fetchLaborLogs]);
 
-  // ── Phase CRUD handlers ────────────────────────────────────────
-  const handleUpdatePhase = async (id: number, updates: Partial<Phase>) => {
+  // ── Harvest Log handlers (stable refs) ────────────────────────
+  const handleHarvestLogSubmit = useCallback(async (
+    form: { logDate: string; notes: string },
+    phase: Phase
+  ) => {
+    const res = await fetch("/api/harvest-logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        farmPhaseId: phase.id,
+        logDate: form.logDate,
+        notes: form.notes || null,
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || "Failed to save record");
+    }
+    fetchHarvestLogs();
+  }, [fetchHarvestLogs]);
+
+  const handleDeleteHarvestLog = useCallback(async (id: number) => {
+    if (!confirm("Delete this harvest log?")) return;
+    const res = await fetch(`/api/harvest-logs?id=${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete");
+    fetchHarvestLogs();
+  }, [fetchHarvestLogs]);
+
+  // ── Phase CRUD handlers (stable refs) ─────────────────────────
+  const handleUpdatePhase = useCallback(async (id: number, updates: Partial<Phase>) => {
     const res = await fetch("/api/phases", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -597,16 +650,16 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     }
     fetchPhases();
     fetchFarms();
-  };
+  }, [fetchPhases, fetchFarms]);
 
-  const handleDeletePhase = async (id: number) => {
+  const handleDeletePhase = useCallback(async (id: number) => {
     if (!confirm("Delete this phase?")) return;
     const res = await fetch(`/api/phases?id=${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error("Failed to delete phase");
     fetchPhases();
-  };
+  }, [fetchPhases]);
 
-  const handleAddPhase = async (phase: Omit<Phase, "id">) => {
+  const handleAddPhase = useCallback(async (phase: Omit<Phase, "id">) => {
     const res = await fetch("/api/phases", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -618,130 +671,147 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     }
     fetchPhases();
     fetchFarms();
-  };
+  }, [fetchPhases, fetchFarms]);
 
   const userName = user?.name ?? "";
 
-  // ── Logout ───────────────────────────────────────────────────────
-  const handleLogout = async () => {
+  // ── Logout (stable ref) ───────────────────────────────────────
+  const handleLogout = useCallback(async () => {
     await fetch("/api/auth", { method: "DELETE" });
     setUser(null);
     window.location.href = "/";
-  };
+  }, []);
 
-  // ── Computed values ──────────────────────────────────────────────
-  const phasesWithWeeks = phases.map((phase) => {
+  // ── Computed values (memoized) ───────────────────────────────────
+  const phasesWithWeeks = useMemo(() => phases.map((phase) => {
     const sowingDateStr = phase.sowingDate as string;
     if (!sowingDateStr) return { ...phase, weeksSinceSowing: "-" };
     const diffWeeks = calculateWeeksSinceSowing(sowingDateStr, selectedMonday);
     return { ...phase, weeksSinceSowing: diffWeeks >= 0 ? diffWeeks : `${diffWeeks}` };
-  });
+  }), [phases, selectedMonday]);
 
-  const calculatePhaseLaborCost = (phase: Phase): number => {
-    const weeksSinceSowing = calculateWeeksSinceSowing(phase.sowingDate, selectedMonday);
-    if (weeksSinceSowing < 0) return 0;
-    const matchingSop = laborSop.filter(
-      (sop) => sop.cropCode === phase.cropCode && sop.week === weeksSinceSowing
-    );
-    const areaHa = parseFloat(String(phase.areaHa)) || 0;
+  const farmSummaries = useMemo(() => {
+    const calcLaborCost = (phase: Phase): number => {
+      const weeksSinceSowing = calculateWeeksSinceSowing(phase.sowingDate, selectedMonday);
+      if (weeksSinceSowing < 0) return 0;
+      const matchingSop = laborSop.filter(
+        (sop) => sop.cropCode === phase.cropCode && sop.week === weeksSinceSowing
+      );
+      const areaHa = parseFloat(String(phase.areaHa)) || 0;
+      const farmOverride = farms.find((f) => f.name === phase.farm);
+      const overrideRate = farmOverride?.laborRatePerDay != null
+        ? parseFloat(String(farmOverride.laborRatePerDay))
+        : null;
 
-    // Check for per-farm labor rate override
-    const farmOverride = farms.find((f) => f.name === phase.farm);
-    const overrideRate = farmOverride?.laborRatePerDay != null
-      ? parseFloat(String(farmOverride.laborRatePerDay))
-      : null;
+      return matchingSop.reduce((total, sop) => {
+        const costPerDay = (overrideRate != null && overrideRate > 0)
+          ? overrideRate
+          : parseFloat(String(sop.costPerCasualDay)) || 0;
+        const totalMandays = sop.noOfCasuals * sop.noOfDays * areaHa;
+        return total + totalMandays * costPerDay;
+      }, 0);
+    };
 
-    return matchingSop.reduce((total, sop) => {
-      const costPerDay = (overrideRate != null && overrideRate > 0)
-        ? overrideRate
-        : parseFloat(String(sop.costPerCasualDay)) || 0;
-      const totalMandays = sop.noOfCasuals * sop.noOfDays * areaHa;
-      return total + totalMandays * costPerDay;
-    }, 0);
-  };
+    const calcNutriCost = (phase: Phase): number => {
+      const weeksSinceSowing = calculateWeeksSinceSowing(phase.sowingDate, selectedMonday);
+      if (weeksSinceSowing < 0) return 0;
+      const matchingSop = nutriSop.filter(
+        (sop) => sop.cropCode === phase.cropCode && sop.week === weeksSinceSowing
+      );
+      const areaHa = parseFloat(String(phase.areaHa)) || 0;
+      return matchingSop.reduce((total, sop) => {
+        const costPerHa = parseFloat(String(sop.cost)) || 0;
+        return total + costPerHa * areaHa;
+      }, 0);
+    };
 
-  const calculatePhaseNutriCost = (phase: Phase): number => {
-    const weeksSinceSowing = calculateWeeksSinceSowing(phase.sowingDate, selectedMonday);
-    if (weeksSinceSowing < 0) return 0;
-    const matchingSop = nutriSop.filter(
-      (sop) => sop.cropCode === phase.cropCode && sop.week === weeksSinceSowing
-    );
-    const areaHa = parseFloat(String(phase.areaHa)) || 0;
-    return matchingSop.reduce((total, sop) => {
-      const costPerHa = parseFloat(String(sop.cost)) || 0;
-      return total + costPerHa * areaHa;
-    }, 0);
-  };
+    return phases.reduce((acc: FarmSummary[], phase) => {
+      const existing = acc.find((f) => f.farm === phase.farm);
+      const areaHa = parseFloat(String(phase.areaHa)) || 0;
+      const laborCost = calcLaborCost(phase);
+      const nutriCost = calcNutriCost(phase);
 
-  const farmSummaries: FarmSummary[] = phases.reduce((acc: FarmSummary[], phase) => {
-    const existing = acc.find((f) => f.farm === phase.farm);
-    const areaHa = parseFloat(String(phase.areaHa)) || 0;
-    const laborCost = calculatePhaseLaborCost(phase);
-    const nutriCost = calculatePhaseNutriCost(phase);
+      if (existing) {
+        existing.totalAcreage += areaHa;
+        existing.phaseCount += 1;
+        existing.totalLaborCost += laborCost;
+        existing.totalNutriCost += nutriCost;
+      } else {
+        acc.push({
+          farm: phase.farm,
+          totalAcreage: areaHa,
+          phaseCount: 1,
+          totalLaborCost: laborCost,
+          totalNutriCost: nutriCost,
+        });
+      }
+      return acc;
+    }, []);
+  }, [phases, laborSop, nutriSop, farms, selectedMonday]);
 
-    if (existing) {
-      existing.totalAcreage += areaHa;
-      existing.phaseCount += 1;
-      existing.totalLaborCost += laborCost;
-      existing.totalNutriCost += nutriCost;
-    } else {
-      acc.push({
-        farm: phase.farm,
-        totalAcreage: areaHa,
-        phaseCount: 1,
-        totalLaborCost: laborCost,
-        totalNutriCost: nutriCost,
-      });
-    }
-    return acc;
-  }, []);
+  const contextValue = useMemo<DashboardContextValue>(() => ({
+    phases,
+    laborSop,
+    nutriSop,
+    keyInputs,
+    feedingRecords,
+    laborLogs,
+    harvestLogs,
+    farms,
+    loading,
+    selectedYear,
+    setSelectedYear,
+    selectedWeek,
+    setSelectedWeek,
+    selectedMonday,
+    formattedDate,
+    farmSummaries,
+    phasesWithWeeks,
+    fetchPhases,
+    fetchLaborSop,
+    fetchNutriSop,
+    fetchKeyInputs,
+    fetchFeedingRecords,
+    fetchLaborLogs,
+    fetchHarvestLogs,
+    fetchFarms,
+    handlePhaseUpload,
+    handleLaborUpload,
+    handleNutriUpload,
+    handleKeyInputsUpload,
+    handleClearPhases,
+    handleClearLabor,
+    handleClearNutri,
+    handleClearKeyInputs,
+    handleFeedingSubmit,
+    handleDeleteFeedingRecord,
+    handleLaborLogSubmit,
+    handleDeleteLaborLog,
+    handleHarvestLogSubmit,
+    handleDeleteHarvestLog,
+    handleUpdatePhase,
+    handleDeletePhase,
+    handleAddPhase,
+    user,
+    userName,
+    handleLogout,
+  }), [
+    phases, laborSop, nutriSop, keyInputs, feedingRecords, laborLogs, harvestLogs, farms, loading,
+    selectedYear, selectedWeek, selectedMonday, formattedDate,
+    farmSummaries, phasesWithWeeks,
+    fetchPhases, fetchLaborSop, fetchNutriSop, fetchKeyInputs,
+    fetchFeedingRecords, fetchLaborLogs, fetchHarvestLogs, fetchFarms,
+    handlePhaseUpload, handleLaborUpload, handleNutriUpload, handleKeyInputsUpload,
+    handleClearPhases, handleClearLabor, handleClearNutri, handleClearKeyInputs,
+    handleFeedingSubmit, handleDeleteFeedingRecord,
+    handleLaborLogSubmit, handleDeleteLaborLog,
+    handleHarvestLogSubmit, handleDeleteHarvestLog,
+    handleUpdatePhase, handleDeletePhase, handleAddPhase,
+    user, userName, handleLogout,
+  ]);
 
   return (
-    <DashboardContext.Provider
-      value={{
-        phases,
-        laborSop,
-        nutriSop,
-        keyInputs,
-        feedingRecords,
-        laborLogs,
-        farms,
-        loading,
-        selectedYear,
-        setSelectedYear,
-        selectedWeek,
-        setSelectedWeek,
-        selectedMonday,
-        formattedDate,
-        farmSummaries,
-        phasesWithWeeks,
-        fetchPhases,
-        fetchLaborSop,
-        fetchNutriSop,
-        fetchKeyInputs,
-        fetchFeedingRecords,
-        fetchLaborLogs,
-        fetchFarms,
-        handlePhaseUpload,
-        handleLaborUpload,
-        handleNutriUpload,
-        handleKeyInputsUpload,
-        handleClearPhases,
-        handleClearLabor,
-        handleClearNutri,
-        handleClearKeyInputs,
-        handleFeedingSubmit,
-        handleDeleteFeedingRecord,
-        handleLaborLogSubmit,
-        handleDeleteLaborLog,
-        handleUpdatePhase,
-        handleDeletePhase,
-        handleAddPhase,
-        user,
-        userName,
-        handleLogout,
-      }}
-    >
+    <DashboardContext.Provider value={contextValue}>
       {children}
     </DashboardContext.Provider>
   );
