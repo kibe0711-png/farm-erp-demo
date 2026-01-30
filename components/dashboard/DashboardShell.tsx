@@ -8,6 +8,7 @@ import LaborSopTab from "./tabs/LaborSopTab";
 import NutriSopTab from "./tabs/NutriSopTab";
 import KeyInputsTab from "./tabs/KeyInputsTab";
 import OperationsView from "./tabs/OperationsView";
+import IPPView from "./tabs/IPPView";
 import FarmSettingsTab from "./tabs/FarmSettingsTab";
 import UsersManagement from "./tabs/UsersManagement";
 
@@ -34,6 +35,7 @@ export default function DashboardShell() {
           {activeSection === "nutri" && <NutriSopTab />}
           {activeSection === "keyInputs" && <KeyInputsTab />}
           {activeSection === "operations" && <OperationsView />}
+          {activeSection === "ipp" && <IPPView />}
           {activeSection === "settings" && <FarmSettingsTab />}
           {activeSection === "users" && <UsersManagement />}
         </main>
