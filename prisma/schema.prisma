@@ -164,3 +164,24 @@ model CropKeyInput {
 
   @@map("crop_key_inputs")
 }
+
+model HarvestSchedule {
+  id            Int      @id @default(autoincrement())
+  farmPhaseId   Int      @map("farm_phase_id")
+  weekStartDate DateTime @map("week_start_date") @db.Date
+  dayOfWeek     Int      @map("day_of_week")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([farmPhaseId, weekStartDate, dayOfWeek])
+  @@map("harvest_schedules")
+}
+
+model HarvestLog {
+  id          Int      @id @default(autoincrement())
+  farmPhaseId Int      @map("farm_phase_id")
+  logDate     DateTime @map("log_date") @db.Date
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("harvest_logs")
+}

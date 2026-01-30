@@ -9,7 +9,7 @@ const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 type Status = "done" | "missed" | "pending" | "upcoming";
 
 interface ComplianceEntry {
-  type: "labor" | "nutri";
+  type: "labor" | "nutri" | "harvest";
   farmPhaseId: number;
   phaseId: string;
   farm: string;
@@ -98,14 +98,15 @@ export default function DailyCompliance() {
             acc[key].days[entry.dayOfWeek] = entry.status;
             return acc;
           },
-          {} as Record<string, { key: string; type: "labor" | "nutri"; phaseId: string; task: string; days: Record<number, Status> }>
+          {} as Record<string, { key: string; type: "labor" | "nutri" | "harvest"; phaseId: string; task: string; days: Record<number, Status> }>
         )
       )
     : [];
 
-  // Sort: labor first, then nutri, then by phaseId
+  // Sort: labor first, then nutri, then harvest, then by phaseId
+  const typeOrder: Record<string, number> = { labor: 0, nutri: 1, harvest: 2 };
   groupedRows.sort((a, b) => {
-    if (a.type !== b.type) return a.type === "labor" ? -1 : 1;
+    if (a.type !== b.type) return (typeOrder[a.type] ?? 3) - (typeOrder[b.type] ?? 3);
     return a.phaseId.localeCompare(b.phaseId);
   });
 
@@ -235,9 +236,13 @@ export default function DailyCompliance() {
                         >
                           <td className="py-2 px-3">
                             <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
-                              row.type === "labor" ? "bg-teal-100 text-teal-700" : "bg-purple-100 text-purple-700"
+                              row.type === "labor"
+                                ? "bg-teal-100 text-teal-700"
+                                : row.type === "nutri"
+                                ? "bg-purple-100 text-purple-700"
+                                : "bg-amber-100 text-amber-700"
                             }`}>
-                              {row.type === "labor" ? "Labor" : "Nutri"}
+                              {row.type === "labor" ? "Labor" : row.type === "nutri" ? "Nutri" : "Harvest"}
                             </span>
                           </td>
                           <td className="py-2 px-3 text-gray-800 font-medium text-xs">{row.phaseId}</td>

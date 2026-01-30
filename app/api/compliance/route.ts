@@ -17,7 +17,8 @@ export async function GET(request: Request) {
     const weekDate = new Date(weekStart);
 
     // Fetch all data in parallel
-    const [laborSchedules, nutriSchedules, laborLogs, feedingRecords, laborSops, nutriSops, farmPhases] =
+    const weekEndDate = new Date(weekDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const [laborSchedules, nutriSchedules, harvestSchedules, laborLogs, feedingRecords, harvestLogs, laborSops, nutriSops, farmPhases] =
       await Promise.all([
         prisma.laborSchedule.findMany({
           where: { farmPhaseId: { in: farmPhaseIds }, weekStartDate: weekDate },
@@ -25,22 +26,25 @@ export async function GET(request: Request) {
         prisma.nutriSchedule.findMany({
           where: { farmPhaseId: { in: farmPhaseIds }, weekStartDate: weekDate },
         }),
+        prisma.harvestSchedule.findMany({
+          where: { farmPhaseId: { in: farmPhaseIds }, weekStartDate: weekDate },
+        }),
         prisma.laborLog.findMany({
           where: {
             farmPhaseId: { in: farmPhaseIds },
-            logDate: {
-              gte: weekDate,
-              lt: new Date(weekDate.getTime() + 7 * 24 * 60 * 60 * 1000),
-            },
+            logDate: { gte: weekDate, lt: weekEndDate },
           },
         }),
         prisma.feedingRecord.findMany({
           where: {
             farmPhaseId: { in: farmPhaseIds },
-            applicationDate: {
-              gte: weekDate,
-              lt: new Date(weekDate.getTime() + 7 * 24 * 60 * 60 * 1000),
-            },
+            applicationDate: { gte: weekDate, lt: weekEndDate },
+          },
+        }),
+        prisma.harvestLog.findMany({
+          where: {
+            farmPhaseId: { in: farmPhaseIds },
+            logDate: { gte: weekDate, lt: weekEndDate },
           },
         }),
         prisma.laborSop.findMany(),
@@ -72,9 +76,17 @@ export async function GET(request: Request) {
       feedingLogSet.add(`${rec.farmPhaseId}-${rec.product}-${dayOfWeek}`);
     });
 
+    // Build harvest log lookup: farmPhaseId + dayOfWeek → true
+    const harvestLogSet = new Set<string>();
+    harvestLogs.forEach((log) => {
+      const logDate = new Date(log.logDate);
+      const dayOfWeek = (logDate.getUTCDay() + 6) % 7;
+      harvestLogSet.add(`${log.farmPhaseId}-${dayOfWeek}`);
+    });
+
     // Build compliance entries
     const entries: {
-      type: "labor" | "nutri";
+      type: "labor" | "nutri" | "harvest";
       farmPhaseId: number;
       phaseId: string;
       farm: string;
@@ -143,6 +155,35 @@ export async function GET(request: Request) {
         phaseId: phase.phaseId,
         farm: phase.farm,
         task: sop.products,
+        dayOfWeek: sched.dayOfWeek,
+        status,
+      });
+    });
+
+    harvestSchedules.forEach((sched) => {
+      const phase = phaseMap.get(sched.farmPhaseId);
+      if (!phase) return;
+
+      const scheduledDate = new Date(weekStartTime + sched.dayOfWeek * 24 * 60 * 60 * 1000);
+      const hasLog = harvestLogSet.has(`${sched.farmPhaseId}-${sched.dayOfWeek}`);
+
+      let status: "done" | "missed" | "pending" | "upcoming";
+      if (hasLog) {
+        status = "done";
+      } else if (scheduledDate.getTime() < todayDate.getTime()) {
+        status = "missed";
+      } else if (scheduledDate.getTime() === todayDate.getTime()) {
+        status = "pending";
+      } else {
+        status = "upcoming";
+      }
+
+      entries.push({
+        type: "harvest",
+        farmPhaseId: sched.farmPhaseId,
+        phaseId: phase.phaseId,
+        farm: phase.farm,
+        task: "Harvest",
         dayOfWeek: sched.dayOfWeek,
         status,
       });
