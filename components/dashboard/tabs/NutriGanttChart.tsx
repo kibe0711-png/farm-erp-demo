@@ -4,12 +4,32 @@ import { useState, useEffect, useCallback } from "react";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+const CROP_COLORS: Record<string, { bg: string; text: string }> = {
+  FB:  { bg: "bg-red-100",    text: "text-red-700" },
+  TSB: { bg: "bg-blue-100",   text: "text-blue-700" },
+  GC:  { bg: "bg-green-100",  text: "text-green-700" },
+  RC:  { bg: "bg-yellow-100", text: "text-yellow-700" },
+  KA:  { bg: "bg-pink-100",   text: "text-pink-700" },
+  BC:  { bg: "bg-orange-100", text: "text-orange-700" },
+  SP:  { bg: "bg-cyan-100",   text: "text-cyan-700" },
+  XFB: { bg: "bg-rose-100",   text: "text-rose-700" },
+  MCR: { bg: "bg-indigo-100", text: "text-indigo-700" },
+  MCG: { bg: "bg-emerald-100",text: "text-emerald-700" },
+};
+
+const DEFAULT_CROP_COLOR = { bg: "bg-gray-100", text: "text-gray-700" };
+
+function getCropColor(cropCode: string) {
+  return CROP_COLORS[cropCode] || DEFAULT_CROP_COLOR;
+}
+
 export interface NutriGanttActivity {
   key: string; // "farmPhaseId-sopId"
   label: string; // e.g. "FB W3 - CAN"
   farmPhaseId: number;
   sopId: number;
   totalQuantity: number;
+  cropCode: string;
 }
 
 interface Override {
@@ -241,10 +261,10 @@ export default function NutriGanttChart({
       )}
 
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm border-collapse">
+        <table className="w-full text-sm border-collapse table-fixed">
           <thead>
             <tr className="border-b border-gray-300">
-              <th className="text-left py-2 px-3 font-medium text-gray-700 min-w-[220px]">
+              <th className="text-left py-2 px-3 font-medium text-gray-700 w-[220px] max-w-[220px]">
                 Activity
               </th>
               {DAY_LABELS.map((day) => (
@@ -268,11 +288,14 @@ export default function NutriGanttChart({
 
               return (
                 <tr key={act.key} className={`border-b border-gray-100 ${isNewPhase && idx > 0 ? "border-t-2 border-t-gray-300" : ""}`}>
-                  <td className="py-2 px-3 text-gray-800 font-medium text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="flex-1">{act.label}</span>
+                  <td className="py-2 px-3 text-gray-800 font-medium text-xs w-[220px] max-w-[220px]">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${getCropColor(act.cropCode).bg} ${getCropColor(act.cropCode).text}`}>
+                        {act.cropCode}
+                      </span>
+                      <span className="flex-1 truncate" title={act.label}>{act.label}</span>
                       {isAdded && (
-                        <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium">
+                        <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium shrink-0">
                           added
                         </span>
                       )}

@@ -87,6 +87,7 @@ export default function NutriActivitiesTab() {
         farmPhaseId: phase.id,
         sopId: sop.id,
         totalQuantity: (parseFloat(String(sop.rateHa)) || 0) * areaHa,
+        cropCode: phase.cropCode,
       }));
     });
 
@@ -117,6 +118,7 @@ export default function NutriActivitiesTab() {
         farmPhaseId: phase.id,
         sopId: sop.id,
         totalQuantity: (parseFloat(String(sop.rateHa)) || 0) * areaHa,
+        cropCode: phase.cropCode,
       });
     });
 

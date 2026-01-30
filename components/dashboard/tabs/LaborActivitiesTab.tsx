@@ -89,6 +89,7 @@ export default function LaborActivitiesTab() {
         farmPhaseId: phase.id,
         sopId: sop.id,
         totalMandays: sop.noOfCasuals * sop.noOfDays * areaHa,
+        cropCode: phase.cropCode,
       }));
     });
 
@@ -119,6 +120,7 @@ export default function LaborActivitiesTab() {
         farmPhaseId: phase.id,
         sopId: sop.id,
         totalMandays: sop.noOfCasuals * sop.noOfDays * areaHa,
+        cropCode: phase.cropCode,
       });
     });
 
