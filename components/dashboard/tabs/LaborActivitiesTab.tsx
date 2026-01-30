@@ -10,6 +10,7 @@ import {
   ACTIVITY_COLUMNS,
 } from "../DashboardContext";
 import { hasPermission, Permission } from "@/lib/auth/roles";
+import jsPDF from "jspdf";
 
 interface Override {
   id: number;
@@ -236,6 +237,84 @@ export default function LaborActivitiesTab() {
     });
   });
 
+  const downloadPdf = () => {
+    if (laborActivities.length === 0 || !selectedFarm) return;
+
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 14;
+    const contentW = pageW - margin * 2;
+    let y = margin;
+
+    const checkPage = (needed: number) => {
+      if (y + needed > pageH - 12) {
+        doc.addPage();
+        y = margin;
+      }
+    };
+
+    // Header
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 64, 175); // blue-800
+    doc.text(`${selectedFarm} — Labor Activities`, margin, y);
+    y += 6;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(107, 114, 128); // gray-500
+    const farmAcreage = farmSummaries.find((f) => f.farm === selectedFarm)?.totalAcreage.toFixed(2) ?? "-";
+    doc.text(`Week ${selectedWeek} | ${farmAcreage} Ha total`, margin, y);
+    y += 8;
+
+    // Table columns
+    const cols = [margin, margin + 30, margin + 50, margin + 68, margin + 82, margin + 110, margin + 130, margin + 152, margin + 180, margin + 210];
+    const headers = ["Phase", "Crop", "Area (Ha)", "Week", "Task", "Casuals", "Days", "Mandays", "Cost/Day", "Total Cost"];
+
+    // Table header row
+    doc.setFillColor(243, 244, 246);
+    doc.rect(margin, y - 3.5, contentW, 5.5, "F");
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(55, 65, 81);
+    headers.forEach((h, i) => doc.text(h, cols[i] + 1, y));
+    y += 5;
+
+    // Table rows
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(31, 41, 55);
+    doc.setFontSize(7);
+
+    for (const row of laborActivities) {
+      checkPage(5);
+      doc.text(String(row.phaseId), cols[0] + 1, y);
+      doc.text(String(row.cropCode), cols[1] + 1, y);
+      doc.text(String(row.areaHa), cols[2] + 1, y);
+      doc.text(String(row.week), cols[3] + 1, y);
+      doc.text(String(row.task), cols[4] + 1, y);
+      doc.text(String(row.casuals), cols[5] + 1, y);
+      doc.text(String(row.days), cols[6] + 1, y);
+      doc.text(String(row.totalMandays), cols[7] + 1, y);
+      doc.text(String(row.costPerDay), cols[8] + 1, y);
+      doc.text(String(row.totalCost), cols[9] + 1, y);
+      y += 4.5;
+    }
+
+    // Total row
+    const grandTotal = laborActivities.reduce(
+      (sum, r) => sum + parseFloat(String(r.totalCost).replace(/,/g, "") || "0"),
+      0
+    );
+    y += 1;
+    doc.setFillColor(239, 246, 255); // blue-50
+    doc.rect(margin, y - 3.5, contentW, 5.5, "F");
+    doc.setFont("helvetica", "bold");
+    doc.text("Total", cols[0] + 1, y);
+    doc.text(grandTotal.toLocaleString() + " RWF", cols[9] + 1, y);
+
+    doc.save(`LaborActivities-${selectedFarm}-W${selectedWeek}.pdf`);
+  };
+
   return (
     <div className="space-y-6">
       <WeekSelector />
@@ -289,6 +368,14 @@ export default function LaborActivitiesTab() {
                 total
               </p>
             </div>
+            {laborActivities.length > 0 && (
+              <button
+                onClick={downloadPdf}
+                className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700"
+              >
+                Download PDF
+              </button>
+            )}
           </div>
 
           <div className="mb-6">
