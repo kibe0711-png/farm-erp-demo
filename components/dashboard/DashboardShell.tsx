@@ -12,12 +12,22 @@ import UsersManagement from "./tabs/UsersManagement";
 
 export default function DashboardShell() {
   const [activeSection, setActiveSection] = useState<SidebarTab>("phases");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <DashboardProvider>
       <div className="flex min-h-screen">
-        <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
-        <main className="ml-64 flex-1 bg-gray-50 p-8">
+        <Sidebar
+          activeSection={activeSection}
+          onSectionChange={setActiveSection}
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
+        <main
+          className={`flex-1 bg-gray-50 p-8 transition-all duration-300 ${
+            sidebarCollapsed ? "ml-16" : "ml-64"
+          }`}
+        >
           {activeSection === "phases" && <PhasesTab />}
           {activeSection === "labor" && <LaborSopTab />}
           {activeSection === "nutri" && <NutriSopTab />}
