@@ -6,6 +6,7 @@ import Sidebar, { type SidebarTab } from "./Sidebar";
 import PhasesTab from "./tabs/PhasesTab";
 import LaborSopTab from "./tabs/LaborSopTab";
 import NutriSopTab from "./tabs/NutriSopTab";
+import KeyInputsTab from "./tabs/KeyInputsTab";
 import OperationsView from "./tabs/OperationsView";
 import FarmSettingsTab from "./tabs/FarmSettingsTab";
 import UsersManagement from "./tabs/UsersManagement";
@@ -31,6 +32,7 @@ export default function DashboardShell() {
           {activeSection === "phases" && <PhasesTab />}
           {activeSection === "labor" && <LaborSopTab />}
           {activeSection === "nutri" && <NutriSopTab />}
+          {activeSection === "keyInputs" && <KeyInputsTab />}
           {activeSection === "operations" && <OperationsView />}
           {activeSection === "settings" && <FarmSettingsTab />}
           {activeSection === "users" && <UsersManagement />}

@@ -76,6 +76,32 @@ export interface AuthUser {
   role: string;
 }
 
+export interface KeyInputItem {
+  id: number;
+  cropCode: string;
+  nurseryDays: number;
+  outgrowingDays: number;
+  yieldPerHa: string | number;
+  harvestWeeks: number;
+  rejectRate: string | number;
+  wk1: string | number | null;
+  wk2: string | number | null;
+  wk3: string | number | null;
+  wk4: string | number | null;
+  wk5: string | number | null;
+  wk6: string | number | null;
+  wk7: string | number | null;
+  wk8: string | number | null;
+  wk9: string | number | null;
+  wk10: string | number | null;
+  wk11: string | number | null;
+  wk12: string | number | null;
+  wk13: string | number | null;
+  wk14: string | number | null;
+  wk15: string | number | null;
+  wk16: string | number | null;
+}
+
 // ── Constants ──────────────────────────────────────────────────────
 export const PHASE_HEADERS = ["crop_code", "phase_id", "sowing_date", "farm", "area_ha"];
 export const LABOR_HEADERS = ["crop_code", "week", "task", "no_of_casuals", "cost_per_casual_day", "no_of_days"];
@@ -136,6 +162,38 @@ export const NUTRI_ACTIVITY_COLUMNS = [
   { key: "totalCost", label: "Total Cost" },
 ];
 
+export const KEY_INPUT_HEADERS = [
+  "cropCode", "nurseryDays", "outgrowingDays", "yieldPerHa",
+  "harvestWeeks", "rejectRate",
+  "wk1", "wk2", "wk3", "wk4", "wk5", "wk6", "wk7", "wk8",
+  "wk9", "wk10", "wk11", "wk12", "wk13", "wk14", "wk15", "wk16",
+];
+
+export const KEY_INPUT_COLUMNS = [
+  { key: "cropCode", label: "Crop Code" },
+  { key: "nurseryDays", label: "Nursery Days" },
+  { key: "outgrowingDays", label: "Outgrowing Days" },
+  { key: "yieldPerHa", label: "Yield/Ha" },
+  { key: "harvestWeeks", label: "Harvest Weeks" },
+  { key: "rejectRate", label: "Reject Rate (%)" },
+  { key: "wk1", label: "Wk1" },
+  { key: "wk2", label: "Wk2" },
+  { key: "wk3", label: "Wk3" },
+  { key: "wk4", label: "Wk4" },
+  { key: "wk5", label: "Wk5" },
+  { key: "wk6", label: "Wk6" },
+  { key: "wk7", label: "Wk7" },
+  { key: "wk8", label: "Wk8" },
+  { key: "wk9", label: "Wk9" },
+  { key: "wk10", label: "Wk10" },
+  { key: "wk11", label: "Wk11" },
+  { key: "wk12", label: "Wk12" },
+  { key: "wk13", label: "Wk13" },
+  { key: "wk14", label: "Wk14" },
+  { key: "wk15", label: "Wk15" },
+  { key: "wk16", label: "Wk16" },
+];
+
 // ── Utility functions ──────────────────────────────────────────────
 export function getMondayOfWeek(year: number, week: number): Date {
   const jan4 = new Date(year, 0, 4);
@@ -181,6 +239,7 @@ interface DashboardContextValue {
   phases: Phase[];
   laborSop: LaborSopItem[];
   nutriSop: NutriSopItem[];
+  keyInputs: KeyInputItem[];
   feedingRecords: FeedingRecord[];
   laborLogs: LaborLogRecord[];
   farms: FarmItem[];
@@ -202,6 +261,7 @@ interface DashboardContextValue {
   fetchPhases: () => Promise<void>;
   fetchLaborSop: () => Promise<void>;
   fetchNutriSop: () => Promise<void>;
+  fetchKeyInputs: () => Promise<void>;
   fetchFeedingRecords: () => Promise<void>;
   fetchLaborLogs: () => Promise<void>;
   fetchFarms: () => Promise<void>;
@@ -210,11 +270,13 @@ interface DashboardContextValue {
   handlePhaseUpload: (data: Record<string, string>[]) => Promise<void>;
   handleLaborUpload: (data: Record<string, string>[]) => Promise<void>;
   handleNutriUpload: (data: Record<string, string>[]) => Promise<void>;
+  handleKeyInputsUpload: (data: Record<string, string>[]) => Promise<void>;
 
   // Clear
   handleClearPhases: () => Promise<void>;
   handleClearLabor: () => Promise<void>;
   handleClearNutri: () => Promise<void>;
+  handleClearKeyInputs: () => Promise<void>;
 
   // Feeding
   handleFeedingSubmit: (form: { product: string; actualQty: string; applicationDate: string; notes: string }, phase: Phase) => Promise<void>;
@@ -251,6 +313,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [nutriSop, setNutriSop] = useState<NutriSopItem[]>([]);
   const [feedingRecords, setFeedingRecords] = useState<FeedingRecord[]>([]);
   const [laborLogs, setLaborLogs] = useState<LaborLogRecord[]>([]);
+  const [keyInputs, setKeyInputs] = useState<KeyInputItem[]>([]);
   const [farms, setFarms] = useState<FarmItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -321,6 +384,18 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const fetchKeyInputs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/key-inputs");
+      if (res.ok) setKeyInputs(await res.json());
+    } catch (error) {
+      console.error("Failed to fetch key inputs:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const fetchFarms = useCallback(async () => {
     try {
       const res = await fetch("/api/farms");
@@ -349,10 +424,11 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     fetchPhases();
     fetchLaborSop();
     fetchNutriSop();
+    fetchKeyInputs();
     fetchFeedingRecords();
     fetchLaborLogs();
     fetchFarms();
-  }, [fetchUser, fetchPhases, fetchLaborSop, fetchNutriSop, fetchFeedingRecords, fetchLaborLogs, fetchFarms]);
+  }, [fetchUser, fetchPhases, fetchLaborSop, fetchNutriSop, fetchKeyInputs, fetchFeedingRecords, fetchLaborLogs, fetchFarms]);
 
   // ── Upload handlers ──────────────────────────────────────────────
   const handlePhaseUpload = async (data: Record<string, string>[]) => {
@@ -395,6 +471,19 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     fetchNutriSop();
   };
 
+  const handleKeyInputsUpload = async (data: Record<string, string>[]) => {
+    const res = await fetch("/api/key-inputs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || "Upload failed");
+    }
+    fetchKeyInputs();
+  };
+
   // ── Clear handlers ───────────────────────────────────────────────
   const handleClearPhases = async () => {
     if (!confirm("Are you sure you want to delete all data in this section?")) return;
@@ -412,6 +501,12 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     if (!confirm("Are you sure you want to delete all data in this section?")) return;
     const res = await fetch("/api/nutri-sop", { method: "DELETE" });
     if (res.ok) setNutriSop([]);
+  };
+
+  const handleClearKeyInputs = async () => {
+    if (!confirm("Are you sure you want to delete all data in this section?")) return;
+    const res = await fetch("/api/key-inputs", { method: "DELETE" });
+    if (res.ok) setKeyInputs([]);
   };
 
   // ── Feeding handlers ─────────────────────────────────────────────
@@ -607,6 +702,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         phases,
         laborSop,
         nutriSop,
+        keyInputs,
         feedingRecords,
         laborLogs,
         farms,
@@ -622,15 +718,18 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         fetchPhases,
         fetchLaborSop,
         fetchNutriSop,
+        fetchKeyInputs,
         fetchFeedingRecords,
         fetchLaborLogs,
         fetchFarms,
         handlePhaseUpload,
         handleLaborUpload,
         handleNutriUpload,
+        handleKeyInputsUpload,
         handleClearPhases,
         handleClearLabor,
         handleClearNutri,
+        handleClearKeyInputs,
         handleFeedingSubmit,
         handleDeleteFeedingRecord,
         handleLaborLogSubmit,

@@ -135,3 +135,32 @@ model User {
 
   @@map("users")
 }
+
+model CropKeyInput {
+  id             Int      @id @default(autoincrement())
+  cropCode       String   @map("crop_code") @db.Text
+  nurseryDays    Int      @map("nursery_days")
+  outgrowingDays Int      @map("outgrowing_days")
+  yieldPerHa     Decimal  @map("yield_per_ha") @db.Decimal(10, 2)
+  harvestWeeks   Int      @map("harvest_weeks")
+  rejectRate     Decimal  @map("reject_rate") @db.Decimal(5, 2)
+  wk1            Decimal? @db.Decimal(10, 4)
+  wk2            Decimal? @db.Decimal(10, 4)
+  wk3            Decimal? @db.Decimal(10, 4)
+  wk4            Decimal? @db.Decimal(10, 4)
+  wk5            Decimal? @db.Decimal(10, 4)
+  wk6            Decimal? @db.Decimal(10, 4)
+  wk7            Decimal? @db.Decimal(10, 4)
+  wk8            Decimal? @db.Decimal(10, 4)
+  wk9            Decimal? @db.Decimal(10, 4)
+  wk10           Decimal? @db.Decimal(10, 4)
+  wk11           Decimal? @db.Decimal(10, 4)
+  wk12           Decimal? @db.Decimal(10, 4)
+  wk13           Decimal? @db.Decimal(10, 4)
+  wk14           Decimal? @db.Decimal(10, 4)
+  wk15           Decimal? @db.Decimal(10, 4)
+  wk16           Decimal? @db.Decimal(10, 4)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("crop_key_inputs")
+}

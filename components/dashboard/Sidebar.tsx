@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useDashboard } from "./DashboardContext";
 import { ROLE_LABELS, type UserRoleType } from "@/lib/auth/roles";
 
-export type SidebarTab = "phases" | "labor" | "nutri" | "operations" | "settings" | "users";
+export type SidebarTab = "phases" | "labor" | "nutri" | "keyInputs" | "operations" | "settings" | "users";
 
 interface SidebarProps {
   activeSection: SidebarTab;
@@ -17,6 +17,7 @@ const DATA_ITEMS: { id: SidebarTab; label: string }[] = [
   { id: "phases", label: "Farm Phases" },
   { id: "labor", label: "Labor SOP" },
   { id: "nutri", label: "Nutri SOP" },
+  { id: "keyInputs", label: "Key Inputs" },
 ];
 
 export default function Sidebar({ activeSection, onSectionChange, collapsed, onToggle }: SidebarProps) {
