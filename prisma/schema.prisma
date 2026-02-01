@@ -170,6 +170,7 @@ model HarvestSchedule {
   farmPhaseId   Int      @map("farm_phase_id")
   weekStartDate DateTime @map("week_start_date") @db.Date
   dayOfWeek     Int      @map("day_of_week")
+  pledgeKg      Decimal? @map("pledge_kg") @db.Decimal(10, 2)
   createdAt     DateTime @default(now()) @map("created_at")
 
   @@unique([farmPhaseId, weekStartDate, dayOfWeek])

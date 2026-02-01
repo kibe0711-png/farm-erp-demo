@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const { entries, weekStartDate, farmPhaseIds } = body as {
-      entries: { farmPhaseId: number; dayOfWeek: number }[];
+      entries: { farmPhaseId: number; dayOfWeek: number; pledgeKg?: number | null }[];
       weekStartDate: string;
       farmPhaseIds: number[];
     };
@@ -67,6 +67,7 @@ export async function POST(request: Request) {
           farmPhaseId: e.farmPhaseId,
           weekStartDate: weekDate,
           dayOfWeek: e.dayOfWeek,
+          pledgeKg: e.pledgeKg != null ? e.pledgeKg : null,
         })),
       });
     }
