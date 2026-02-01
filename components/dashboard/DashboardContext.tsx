@@ -236,15 +236,13 @@ export function getYears(): number[] {
 
 export function calculateWeeksSinceSowing(sowingDateStr: string, targetMonday: Date): number {
   const sowingDate = new Date(sowingDateStr);
-  const diffMs = targetMonday.getTime() - sowingDate.getTime();
-  const weeks = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
-  // When sowing falls on the same calendar day as the selected Monday,
-  // timezone offset between UTC (DB dates) and local time (getMondayOfWeek)
-  // can produce a small negative diff. Clamp -1 → 0 when within 1 day.
-  if (weeks === -1 && Math.abs(diffMs) < 24 * 60 * 60 * 1000) {
-    return 0;
-  }
-  return weeks;
+  // Compare calendar dates only, ignoring time/timezone.
+  // Sowing dates from DB are UTC midnight — extract via getUTC*.
+  // Monday from getMondayOfWeek is local midnight — extract via get*.
+  // Both fed into Date.UTC for a clean ms diff with no timezone skew.
+  const sowDay = Date.UTC(sowingDate.getUTCFullYear(), sowingDate.getUTCMonth(), sowingDate.getUTCDate());
+  const monDay = Date.UTC(targetMonday.getFullYear(), targetMonday.getMonth(), targetMonday.getDate());
+  return Math.floor((monDay - sowDay) / (7 * 24 * 60 * 60 * 1000));
 }
 
 // ── Context ────────────────────────────────────────────────────────
