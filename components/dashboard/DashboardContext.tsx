@@ -236,7 +236,10 @@ export function getYears(): number[] {
 
 export function calculateWeeksSinceSowing(sowingDateStr: string, targetMonday: Date): number {
   const sowingDate = new Date(sowingDateStr);
-  const diffTime = targetMonday.getTime() - sowingDate.getTime();
+  // Normalize both dates to UTC midnight to avoid timezone offset issues
+  const sowingUTC = Date.UTC(sowingDate.getFullYear(), sowingDate.getMonth(), sowingDate.getDate());
+  const mondayUTC = Date.UTC(targetMonday.getFullYear(), targetMonday.getMonth(), targetMonday.getDate());
+  const diffTime = mondayUTC - sowingUTC;
   return Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000));
 }
 
