@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import jsPDF from "jspdf";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -34,6 +35,9 @@ interface Props {
   weekStartDate: Date;
   farmPhaseIds: number[];
   canEdit?: boolean;
+  farmName?: string;
+  weekNumber?: number;
+  totalHa?: string;
 }
 
 interface ApiEntry {
@@ -50,6 +54,9 @@ export default function HarvestGanttChart({
   weekStartDate,
   farmPhaseIds,
   canEdit = false,
+  farmName = "",
+  weekNumber = 0,
+  totalHa = "",
 }: Props) {
   const [schedule, setSchedule] = useState<Record<string, PhaseSchedule>>({});
   const [saving, setSaving] = useState(false);
@@ -175,6 +182,100 @@ export default function HarvestGanttChart({
     return total;
   };
 
+  const downloadPdf = () => {
+    if (phases.length === 0) return;
+
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 14;
+    const contentW = pageW - margin * 2;
+    let y = margin;
+
+    const checkPage = (needed: number) => {
+      if (y + needed > pageH - 12) {
+        doc.addPage();
+        y = margin;
+      }
+    };
+
+    // Header
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(180, 83, 9); // amber-700
+    doc.text(`${farmName} — Farmer Pledge`, margin, y);
+    y += 6;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(107, 114, 128); // gray-500
+    doc.text(`Week ${weekNumber} | ${totalHa} Ha total`, margin, y);
+    y += 8;
+
+    // Table columns: Phase | Mon-Sun | Days | Kg
+    const colWidths = [50, 25, 25, 25, 25, 25, 25, 25, 22, 30];
+    const cols: number[] = [];
+    let cx = margin;
+    for (const w of colWidths) { cols.push(cx); cx += w; }
+
+    const headers = ["Phase", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Days", "Kg"];
+
+    // Table header row
+    doc.setFillColor(243, 244, 246);
+    doc.rect(margin, y - 3.5, contentW, 5.5, "F");
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(55, 65, 81);
+    headers.forEach((h, i) => {
+      if (i === 0) doc.text(h, cols[i] + 1, y);
+      else doc.text(h, cols[i] + colWidths[i] / 2, y, { align: "center" });
+    });
+    y += 5;
+
+    // Data rows
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(31, 41, 55);
+    doc.setFontSize(7);
+
+    for (const phase of phases) {
+      checkPage(5);
+      const key = String(phase.farmPhaseId);
+      const days = schedule[key] || new Map();
+      const rowKg = getRowKgTotal(key);
+
+      doc.text(`${phase.cropCode} ${phase.phaseId}`, cols[0] + 1, y);
+
+      DAY_LABELS.forEach((_, dayIdx) => {
+        const kg = days.get(dayIdx);
+        const cellText = days.has(dayIdx) ? (kg != null ? String(kg) : "✓") : "-";
+        doc.text(cellText, cols[dayIdx + 1] + colWidths[dayIdx + 1] / 2, y, { align: "center" });
+      });
+
+      doc.text(String(days.size), cols[8] + colWidths[8] / 2, y, { align: "center" });
+      doc.text(rowKg > 0 ? rowKg.toLocaleString() : "-", cols[9] + colWidths[9] / 2, y, { align: "center" });
+      y += 4.5;
+    }
+
+    // Totals row
+    y += 1;
+    doc.setFillColor(255, 251, 235); // amber-50
+    doc.rect(margin, y - 3.5, contentW, 5.5, "F");
+    doc.setFont("helvetica", "bold");
+    doc.text("Totals", cols[0] + 1, y);
+
+    dayPhaseCounts.forEach((count, idx) => {
+      let cellText = String(count);
+      if (dayKgTotals[idx] > 0) cellText += ` (${dayKgTotals[idx].toLocaleString()} kg)`;
+      doc.text(cellText, cols[idx + 1] + colWidths[idx + 1] / 2, y, { align: "center" });
+    });
+
+    doc.text(String(dayPhaseCounts.reduce((a, b) => a + b, 0)), cols[8] + colWidths[8] / 2, y, { align: "center" });
+    doc.setTextColor(180, 83, 9);
+    doc.text(grandKgTotal > 0 ? `${grandKgTotal.toLocaleString()} kg` : "-", cols[9] + colWidths[9] / 2, y, { align: "center" });
+
+    doc.save(`FarmerPledge-${farmName}-W${weekNumber}.pdf`);
+  };
+
   if (!loaded) {
     return (
       <div className="text-sm text-gray-500 py-4">Loading schedule...</div>
@@ -288,28 +389,36 @@ export default function HarvestGanttChart({
         </table>
       </div>
 
-      {canEdit && (
-        <div className="flex items-center gap-3">
-          <button
-            onClick={saveSchedule}
-            disabled={saving || !dirty}
-            className="bg-amber-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? "Saving..." : "Save Schedule"}
-          </button>
-          {dirty && (
+      <div className="flex items-center gap-3">
+        {canEdit && (
+          <>
             <button
-              onClick={loadSchedule}
-              className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300"
+              onClick={saveSchedule}
+              disabled={saving || !dirty}
+              className="bg-amber-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Reset
+              {saving ? "Saving..." : "Save Schedule"}
             </button>
-          )}
-          {dirty && (
-            <span className="text-xs text-amber-600 font-medium">Unsaved changes</span>
-          )}
-        </div>
-      )}
+            {dirty && (
+              <button
+                onClick={loadSchedule}
+                className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-300"
+              >
+                Reset
+              </button>
+            )}
+            {dirty && (
+              <span className="text-xs text-amber-600 font-medium">Unsaved changes</span>
+            )}
+          </>
+        )}
+        <button
+          onClick={downloadPdf}
+          className="bg-amber-700 text-white px-4 py-2 rounded text-sm font-medium hover:bg-amber-800"
+        >
+          Download PDF
+        </button>
+      </div>
     </div>
   );
 }

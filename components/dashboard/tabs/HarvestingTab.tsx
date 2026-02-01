@@ -90,6 +90,9 @@ export default function HarvestingTab() {
             weekStartDate={selectedMonday}
             farmPhaseIds={farmPhaseIds}
             canEdit={canEditGantt}
+            farmName={selectedFarm}
+            weekNumber={selectedWeek}
+            totalHa={farmSummaries.find((f) => f.farm === selectedFarm)?.totalAcreage.toFixed(2) ?? "-"}
           />
         </div>
       </div>
