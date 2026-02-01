@@ -1,33 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import LaborActivitiesTab from "./LaborActivitiesTab";
 import NutriActivitiesTab from "./NutriActivitiesTab";
 import FeedingTab from "./FeedingTab";
 import LaborLogsTab from "./LaborLogsTab";
 import DailyCompliance from "./DailyCompliance";
 import HarvestingTab from "./HarvestingTab";
+import HarvestRecordsTab from "./HarvestRecordsTab";
+import { useDashboard } from "../DashboardContext";
+import { isRoleAtLeast, UserRole } from "@/lib/auth/roles";
 
-type OpsTab = "activities" | "nutriActivities" | "feeding" | "laborLogs" | "compliance" | "harvesting";
+type OpsTab = "activities" | "nutriActivities" | "feeding" | "laborLogs" | "compliance" | "harvesting" | "harvestRecords";
 
-const TABS: { id: OpsTab; label: string }[] = [
+const ALL_TABS: { id: OpsTab; label: string; minRole?: string }[] = [
   { id: "compliance", label: "Compliance" },
   { id: "activities", label: "Labor Activities" },
   { id: "laborLogs", label: "Labor Logs" },
   { id: "nutriActivities", label: "Nutri Activities" },
   { id: "feeding", label: "Feeding" },
-  { id: "harvesting", label: "Harvesting" },
+  { id: "harvestRecords", label: "Harvest Records" },
+  { id: "harvesting", label: "Farmer Pledge", minRole: UserRole.FARM_SUPERVISOR },
 ];
 
 export default function OperationsView() {
+  const { user } = useDashboard();
   const [activeTab, setActiveTab] = useState<OpsTab>("compliance");
+
+  const tabs = useMemo(() => {
+    return ALL_TABS.filter((tab) => {
+      if (!tab.minRole) return true;
+      return user?.role ? isRoleAtLeast(user.role, tab.minRole as "FARM_MANAGER") : false;
+    });
+  }, [user]);
 
   return (
     <div>
       {/* Horizontal tab bar */}
       <div className="mb-6 border-b border-gray-200">
         <nav className="flex space-x-8 overflow-x-auto">
-          {TABS.map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
@@ -41,6 +53,8 @@ export default function OperationsView() {
                     ? "border-orange-500 text-orange-600"
                     : tab.id === "harvesting"
                     ? "border-amber-500 text-amber-600"
+                    : tab.id === "harvestRecords"
+                    ? "border-green-500 text-green-600"
                     : "border-blue-500 text-blue-600"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
@@ -57,6 +71,7 @@ export default function OperationsView() {
       {activeTab === "laborLogs" && <LaborLogsTab />}
       {activeTab === "nutriActivities" && <NutriActivitiesTab />}
       {activeTab === "feeding" && <FeedingTab />}
+      {activeTab === "harvestRecords" && <HarvestRecordsTab />}
       {activeTab === "harvesting" && <HarvestingTab />}
     </div>
   );

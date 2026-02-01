@@ -21,6 +21,7 @@ export async function POST(request: Request) {
       data: {
         farmPhaseId: data.farmPhaseId,
         logDate: new Date(data.logDate),
+        actualKg: data.actualKg != null ? data.actualKg : 0,
         notes: data.notes || null,
       },
     });
