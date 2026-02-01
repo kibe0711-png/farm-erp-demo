@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import CSVUploader from "@/components/CSVUploader";
-import WeekSelector from "../WeekSelector";
 import { useDashboard, PHASE_HEADERS, getYears, getWeeks } from "../DashboardContext";
 import { hasPermission, Permission } from "@/lib/auth/roles";
 
@@ -14,10 +13,24 @@ function formatDate(value: string): string {
   return value;
 }
 
+/** Traffic light text color: green (<75%), yellow (75-100%), red (>100% of total SOP weeks) */
+function getAgeIndicator(weeksSinceSowing: number | string, maxSopWeek: number | undefined) {
+  const weeks = typeof weeksSinceSowing === "number" ? weeksSinceSowing : parseInt(String(weeksSinceSowing), 10);
+  if (isNaN(weeks) || weeks < 0 || !maxSopWeek || maxSopWeek <= 0) {
+    return { textColor: "text-gray-900" };
+  }
+  const ratio = weeks / maxSopWeek;
+  if (ratio <= 0.75) return { textColor: "text-green-600" };
+  if (ratio <= 1)    return { textColor: "text-yellow-600" };
+  return { textColor: "text-red-600" };
+}
+
 export default function PhasesTab() {
   const {
     phasesWithWeeks,
     phases,
+    laborSop,
+    nutriSop,
     loading,
     handlePhaseUpload,
     handleClearPhases,
@@ -28,11 +41,26 @@ export default function PhasesTab() {
     setSelectedYear,
     selectedWeek,
     setSelectedWeek,
+    selectedMonday,
     formattedDate,
     user,
   } = useDashboard();
 
   const canManage = user?.role ? hasPermission(user.role, Permission.MANAGE_CROPS) : false;
+
+  // Build max SOP week per cropCode (union of labor + nutri SOPs)
+  const maxSopWeekByCrop = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const sop of laborSop) {
+      const cur = map.get(sop.cropCode) ?? 0;
+      if (sop.week > cur) map.set(sop.cropCode, sop.week);
+    }
+    for (const sop of nutriSop) {
+      const cur = map.get(sop.cropCode) ?? 0;
+      if (sop.week > cur) map.set(sop.cropCode, sop.week);
+    }
+    return map;
+  }, [laborSop, nutriSop]);
 
   // Inline edit state
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -314,8 +342,15 @@ export default function PhasesTab() {
                           phase.areaHa
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                        {phase.weeksSinceSowing}
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
+                        {(() => {
+                          const age = getAgeIndicator(phase.weeksSinceSowing, maxSopWeekByCrop.get(phase.cropCode));
+                          return (
+                            <span className={`font-medium ${age.textColor}`}>
+                              {phase.weeksSinceSowing}
+                            </span>
+                          );
+                        })()}
                       </td>
                       {canManage && (
                         <td className="px-4 py-3 text-sm whitespace-nowrap">
