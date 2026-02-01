@@ -236,11 +236,11 @@ export function getYears(): number[] {
 
 export function calculateWeeksSinceSowing(sowingDateStr: string, targetMonday: Date): number {
   const sowingDate = new Date(sowingDateStr);
-  // Normalize both dates to UTC midnight to avoid timezone offset issues
-  const sowingUTC = Date.UTC(sowingDate.getFullYear(), sowingDate.getMonth(), sowingDate.getDate());
+  // Normalize both to date-only to avoid timezone offset between
+  // UTC (DB dates) and local time (getMondayOfWeek) shifting the week number
+  const sowingUTC = Date.UTC(sowingDate.getUTCFullYear(), sowingDate.getUTCMonth(), sowingDate.getUTCDate());
   const mondayUTC = Date.UTC(targetMonday.getFullYear(), targetMonday.getMonth(), targetMonday.getDate());
-  const diffTime = mondayUTC - sowingUTC;
-  return Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000));
+  return Math.floor((mondayUTC - sowingUTC) / (7 * 24 * 60 * 60 * 1000));
 }
 
 // ── Context ────────────────────────────────────────────────────────
