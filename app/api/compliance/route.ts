@@ -95,24 +95,33 @@ export async function GET(request: Request) {
       status: "done" | "missed" | "pending" | "upcoming";
     }[] = [];
 
-    // Today's calendar date in EAT (Africa/Kigali, UTC+3).
-    // We compare calendar dates only (YYYY-MM-DD strings) so timezone-offset
-    // mismatches between weekDate (parsed as UTC) and "now" don't cause
-    // Monday tasks to show as "missed" on Monday morning.
-    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Kigali" }); // "YYYY-MM-DD"
-    const weekStartTime = weekDate.getTime();
+    // Determine today's EAT day-of-week (0=Mon..6=Sun) and the EAT Monday
+    // date string for the current real-world week so we can compare it
+    // against the selected week to decide task status.
+    const nowEAT = new Date(new Date().toLocaleString("en-US", { timeZone: "Africa/Kigali" }));
+    const todayDow = (nowEAT.getDay() + 6) % 7; // Convert Sun=0 to Mon=0
 
-    // Helper: get YYYY-MM-DD string for a scheduled day within the week
-    const getScheduledStr = (dayOfWeek: number) =>
-      new Date(weekStartTime + dayOfWeek * 24 * 60 * 60 * 1000)
-        .toISOString().split("T")[0];
+    // The actual Monday of the selected week: the client sends weekStart
+    // via toISOString which may shift it one day back in UTC+ timezones.
+    // Instead of relying on that, derive the Monday from weekDate itself:
+    // weekDate is the stored/queried date — find its day-of-week and
+    // back-calculate to its Monday.
+    const wdDow = (weekDate.getUTCDay() + 6) % 7; // Mon=0 based
+    const actualMondayMs = weekDate.getTime() - wdDow * 24 * 60 * 60 * 1000;
+    // Current week's Monday in EAT
+    const currentMondayMs = nowEAT.getTime() - todayDow * 24 * 60 * 60 * 1000;
+    // Normalize both to midnight for clean day comparison
+    const actualMondayDay = Math.floor(actualMondayMs / (24 * 60 * 60 * 1000));
+    const currentMondayDay = Math.floor(currentMondayMs / (24 * 60 * 60 * 1000));
 
-    // Helper: determine task status by comparing calendar date strings
+    // Helper: determine task status by comparing day-of-week indices
     const getStatus = (dayOfWeek: number, hasLog: boolean): "done" | "missed" | "pending" | "upcoming" => {
       if (hasLog) return "done";
-      const schedStr = getScheduledStr(dayOfWeek);
-      if (schedStr < todayStr) return "missed";
-      if (schedStr === todayStr) return "pending";
+      if (actualMondayDay < currentMondayDay) return "missed";   // past week
+      if (actualMondayDay > currentMondayDay) return "upcoming"; // future week
+      // Same week — compare day indices
+      if (dayOfWeek < todayDow) return "missed";
+      if (dayOfWeek === todayDow) return "pending";
       return "upcoming";
     };
 
