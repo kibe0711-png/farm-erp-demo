@@ -36,7 +36,7 @@ const STATUS_CELL: Record<Status, { bg: string; text: string; label: string }> =
   done: { bg: "bg-green-600", text: "text-white", label: "Done" },
   missed: { bg: "bg-red-500", text: "text-white", label: "Missed" },
   pending: { bg: "bg-yellow-400", text: "text-yellow-900", label: "Pending" },
-  upcoming: { bg: "bg-gray-100", text: "text-gray-400", label: "" },
+  upcoming: { bg: "bg-gray-100", text: "text-gray-400", label: "Upcoming" },
 };
 
 export default function DailyCompliance() {
