@@ -104,6 +104,31 @@ export default function LaborGanttChart({
           if (!newToggled[key]) newToggled[key] = new Set();
           newToggled[key].add(e.dayOfWeek);
         });
+
+        // Reconcile orphaned toggles whose SOP IDs no longer match current
+        // activities (happens when LaborSop data is re-uploaded with new IDs).
+        const activityKeys = new Set(activities.map((a) => a.key));
+        const orphanedKeys = Object.keys(newToggled).filter((k) => !activityKeys.has(k));
+
+        if (orphanedKeys.length > 0) {
+          const activitiesByPhase = new Map<number, string[]>();
+          activities.forEach((a) => {
+            const list = activitiesByPhase.get(a.farmPhaseId) || [];
+            list.push(a.key);
+            activitiesByPhase.set(a.farmPhaseId, list);
+          });
+
+          orphanedKeys.forEach((orphanKey) => {
+            const farmPhaseId = parseInt(orphanKey.split("-")[0], 10);
+            const candidates = activitiesByPhase.get(farmPhaseId) || [];
+            const target = candidates.find((ck) => !newToggled[ck]);
+            if (target) {
+              newToggled[target] = newToggled[orphanKey];
+              delete newToggled[orphanKey];
+            }
+          });
+        }
+
         setToggled(newToggled);
         setDirty(false);
       }
@@ -112,7 +137,8 @@ export default function LaborGanttChart({
     } finally {
       setLoaded(true);
     }
-  }, [farmPhaseIds, weekStr]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [farmPhaseIds, weekStr, activities]);
 
   useEffect(() => {
     setLoaded(false);
@@ -138,7 +164,9 @@ export default function LaborGanttChart({
     setSaving(true);
     try {
       const entries: ScheduleEntry[] = [];
+      const activityKeySet = new Set(activities.map((a) => a.key));
       Object.entries(toggled).forEach(([key, days]) => {
+        if (!activityKeySet.has(key)) return;
         const [farmPhaseId, laborSopId] = key.split("-").map(Number);
         days.forEach((d) => {
           entries.push({ farmPhaseId, laborSopId, dayOfWeek: d });

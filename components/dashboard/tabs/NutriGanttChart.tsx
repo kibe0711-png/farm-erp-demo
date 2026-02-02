@@ -101,6 +101,35 @@ export default function NutriGanttChart({
           if (!newToggled[key]) newToggled[key] = new Set();
           newToggled[key].add(e.dayOfWeek);
         });
+
+        // Reconcile orphaned toggles whose SOP IDs no longer match current
+        // activities (happens when NutriSop data is re-uploaded with new IDs).
+        // For each orphaned key, try to find an activity with the same
+        // farmPhaseId that has no toggled data yet and remap the days to it.
+        const activityKeys = new Set(activities.map((a) => a.key));
+        const orphanedKeys = Object.keys(newToggled).filter((k) => !activityKeys.has(k));
+
+        if (orphanedKeys.length > 0) {
+          // Group activities by farmPhaseId for remapping
+          const activitiesByPhase = new Map<number, string[]>();
+          activities.forEach((a) => {
+            const list = activitiesByPhase.get(a.farmPhaseId) || [];
+            list.push(a.key);
+            activitiesByPhase.set(a.farmPhaseId, list);
+          });
+
+          orphanedKeys.forEach((orphanKey) => {
+            const farmPhaseId = parseInt(orphanKey.split("-")[0], 10);
+            const candidates = activitiesByPhase.get(farmPhaseId) || [];
+            // Find a candidate activity that doesn't already have toggle data
+            const target = candidates.find((ck) => !newToggled[ck]);
+            if (target) {
+              newToggled[target] = newToggled[orphanKey];
+              delete newToggled[orphanKey];
+            }
+          });
+        }
+
         setToggled(newToggled);
         setDirty(false);
       }
@@ -109,7 +138,8 @@ export default function NutriGanttChart({
     } finally {
       setLoaded(true);
     }
-  }, [farmPhaseIds, weekStr]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [farmPhaseIds, weekStr, activities]);
 
   useEffect(() => {
     setLoaded(false);
@@ -135,7 +165,12 @@ export default function NutriGanttChart({
     setSaving(true);
     try {
       const entries: ScheduleEntry[] = [];
+      // Only save entries for keys that correspond to current activities,
+      // using the activity's SOP ID (which may differ from an orphaned
+      // toggled key after SOP re-upload).
+      const activityKeySet = new Set(activities.map((a) => a.key));
       Object.entries(toggled).forEach(([key, days]) => {
+        if (!activityKeySet.has(key)) return; // skip orphaned keys
         const [farmPhaseId, nutriSopId] = key.split("-").map(Number);
         days.forEach((d) => {
           entries.push({ farmPhaseId, nutriSopId, dayOfWeek: d });
