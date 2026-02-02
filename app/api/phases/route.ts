@@ -25,7 +25,6 @@ export async function GET() {
   try {
     const phases = await prisma.farmPhase.findMany({
       orderBy: { createdAt: "desc" },
-      take: 100,
     });
     return NextResponse.json(phases);
   } catch (error) {
