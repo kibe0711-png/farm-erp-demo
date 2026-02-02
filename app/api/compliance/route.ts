@@ -95,29 +95,33 @@ export async function GET(request: Request) {
       status: "done" | "missed" | "pending" | "upcoming";
     }[] = [];
 
-    // Today's day of week (Mon=0)
-    const now = new Date();
-    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Today's calendar date in EAT (Africa/Kigali, UTC+3).
+    // We compare calendar dates only (YYYY-MM-DD strings) so timezone-offset
+    // mismatches between weekDate (parsed as UTC) and "now" don't cause
+    // Monday tasks to show as "missed" on Monday morning.
+    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Kigali" }); // "YYYY-MM-DD"
     const weekStartTime = weekDate.getTime();
+
+    // Helper: get YYYY-MM-DD string for a scheduled day within the week
+    const getScheduledStr = (dayOfWeek: number) =>
+      new Date(weekStartTime + dayOfWeek * 24 * 60 * 60 * 1000)
+        .toISOString().split("T")[0];
+
+    // Helper: determine task status by comparing calendar date strings
+    const getStatus = (dayOfWeek: number, hasLog: boolean): "done" | "missed" | "pending" | "upcoming" => {
+      if (hasLog) return "done";
+      const schedStr = getScheduledStr(dayOfWeek);
+      if (schedStr < todayStr) return "missed";
+      if (schedStr === todayStr) return "pending";
+      return "upcoming";
+    };
 
     laborSchedules.forEach((sched) => {
       const sop = laborSopMap.get(sched.laborSopId);
       const phase = phaseMap.get(sched.farmPhaseId);
       if (!sop || !phase) return;
 
-      const scheduledDate = new Date(weekStartTime + sched.dayOfWeek * 24 * 60 * 60 * 1000);
       const hasLog = laborLogSet.has(`${sched.farmPhaseId}-${sop.task}-${sched.dayOfWeek}`);
-
-      let status: "done" | "missed" | "pending" | "upcoming";
-      if (hasLog) {
-        status = "done";
-      } else if (scheduledDate.getTime() < todayDate.getTime()) {
-        status = "missed";
-      } else if (scheduledDate.getTime() === todayDate.getTime()) {
-        status = "pending";
-      } else {
-        status = "upcoming";
-      }
 
       entries.push({
         type: "labor",
@@ -126,7 +130,7 @@ export async function GET(request: Request) {
         farm: phase.farm,
         task: sop.task,
         dayOfWeek: sched.dayOfWeek,
-        status,
+        status: getStatus(sched.dayOfWeek, hasLog),
       });
     });
 
@@ -135,19 +139,7 @@ export async function GET(request: Request) {
       const phase = phaseMap.get(sched.farmPhaseId);
       if (!sop || !phase) return;
 
-      const scheduledDate = new Date(weekStartTime + sched.dayOfWeek * 24 * 60 * 60 * 1000);
       const hasLog = feedingLogSet.has(`${sched.farmPhaseId}-${sop.products}-${sched.dayOfWeek}`);
-
-      let status: "done" | "missed" | "pending" | "upcoming";
-      if (hasLog) {
-        status = "done";
-      } else if (scheduledDate.getTime() < todayDate.getTime()) {
-        status = "missed";
-      } else if (scheduledDate.getTime() === todayDate.getTime()) {
-        status = "pending";
-      } else {
-        status = "upcoming";
-      }
 
       entries.push({
         type: "nutri",
@@ -156,7 +148,7 @@ export async function GET(request: Request) {
         farm: phase.farm,
         task: sop.products,
         dayOfWeek: sched.dayOfWeek,
-        status,
+        status: getStatus(sched.dayOfWeek, hasLog),
       });
     });
 
@@ -164,19 +156,7 @@ export async function GET(request: Request) {
       const phase = phaseMap.get(sched.farmPhaseId);
       if (!phase) return;
 
-      const scheduledDate = new Date(weekStartTime + sched.dayOfWeek * 24 * 60 * 60 * 1000);
       const hasLog = harvestLogSet.has(`${sched.farmPhaseId}-${sched.dayOfWeek}`);
-
-      let status: "done" | "missed" | "pending" | "upcoming";
-      if (hasLog) {
-        status = "done";
-      } else if (scheduledDate.getTime() < todayDate.getTime()) {
-        status = "missed";
-      } else if (scheduledDate.getTime() === todayDate.getTime()) {
-        status = "pending";
-      } else {
-        status = "upcoming";
-      }
 
       entries.push({
         type: "harvest",
@@ -185,7 +165,7 @@ export async function GET(request: Request) {
         farm: phase.farm,
         task: "Harvest",
         dayOfWeek: sched.dayOfWeek,
-        status,
+        status: getStatus(sched.dayOfWeek, hasLog),
       });
     });
 
