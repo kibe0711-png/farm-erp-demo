@@ -15,6 +15,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Souk FarmIQ",
   description: "Farm intelligence platform — phases, labor, nutrition & operations",
+  icons: {
+    icon: "/souk-circle.png",
+    apple: "/souk-circle.png",
+  },
 };
 
 export default function RootLayout({

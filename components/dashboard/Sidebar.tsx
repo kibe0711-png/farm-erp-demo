@@ -33,7 +33,7 @@ export default function Sidebar({ activeSection, onSectionChange, collapsed, onT
       {/* Logo + Toggle */}
       <div className="px-3 py-3 border-b border-gray-200 flex items-center justify-between">
         {!collapsed && (
-          <Image src="/souk-logo.png" alt="Souk FarmIQ" width={100} height={33} priority />
+          <Image src="/souk-circle.png" alt="Souk FarmIQ" width={36} height={36} priority />
         )}
         <button
           onClick={onToggle}

@@ -40,7 +40,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm p-8 bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="flex justify-center mb-6">
-          <Image src="/souk-logo.png" alt="Souk FarmIQ" width={180} height={60} priority />
+          <Image src="/souk-circle.png" alt="Souk FarmIQ" width={80} height={80} priority />
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
