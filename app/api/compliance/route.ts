@@ -95,22 +95,30 @@ export async function GET(request: Request) {
       status: "done" | "missed" | "pending" | "upcoming";
     }[] = [];
 
-    // Determine today's EAT day-of-week (0=Mon..6=Sun) and the EAT Monday
-    // date string for the current real-world week so we can compare it
-    // against the selected week to decide task status.
+    // Determine today's EAT day-of-week (0=Mon..6=Sun)
     const nowEAT = new Date(new Date().toLocaleString("en-US", { timeZone: "Africa/Kigali" }));
     const todayDow = (nowEAT.getDay() + 6) % 7; // Convert Sun=0 to Mon=0
 
-    // The actual Monday of the selected week: the client sends weekStart
-    // via toISOString which may shift it one day back in UTC+ timezones.
-    // Instead of relying on that, derive the Monday from weekDate itself:
-    // weekDate is the stored/queried date — find its day-of-week and
-    // back-calculate to its Monday.
-    const wdDow = (weekDate.getUTCDay() + 6) % 7; // Mon=0 based
-    const actualMondayMs = weekDate.getTime() - wdDow * 24 * 60 * 60 * 1000;
+    // Recover the intended Monday from weekDate. The client sends weekStart
+    // via toISOString which shifts the date back one day in EAT (UTC+2):
+    // e.g. Mon Feb 2 00:00 EAT → "2026-02-01" (Sunday in UTC).
+    // If weekDate is a Sunday, the intended Monday is the NEXT day (+1).
+    // If weekDate is already a Monday, no adjustment needed.
+    const utcDay = weekDate.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    let actualMondayMs: number;
+    if (utcDay === 0) {
+      // Sunday → intended Monday is next day
+      actualMondayMs = weekDate.getTime() + 24 * 60 * 60 * 1000;
+    } else if (utcDay === 1) {
+      // Already Monday
+      actualMondayMs = weekDate.getTime();
+    } else {
+      // Other days: go back to the previous Monday
+      actualMondayMs = weekDate.getTime() - (utcDay - 1) * 24 * 60 * 60 * 1000;
+    }
     // Current week's Monday in EAT
     const currentMondayMs = nowEAT.getTime() - todayDow * 24 * 60 * 60 * 1000;
-    // Normalize both to midnight for clean day comparison
+    // Normalize both to day-index for clean comparison
     const actualMondayDay = Math.floor(actualMondayMs / (24 * 60 * 60 * 1000));
     const currentMondayDay = Math.floor(currentMondayMs / (24 * 60 * 60 * 1000));
 
