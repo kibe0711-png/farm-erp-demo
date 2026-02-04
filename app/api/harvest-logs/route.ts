@@ -17,11 +17,18 @@ export async function POST(request: Request) {
   try {
     const data = await request.json();
 
+    const grade1 = data.grade1Kg != null ? Number(data.grade1Kg) : 0;
+    const grade2 = data.grade2Kg != null ? Number(data.grade2Kg) : 0;
+    // actualKg is the sum of both grades for backwards compatibility
+    const totalKg = grade1 + grade2;
+
     const record = await prisma.harvestLog.create({
       data: {
         farmPhaseId: data.farmPhaseId,
         logDate: new Date(data.logDate),
-        actualKg: data.actualKg != null ? data.actualKg : 0,
+        actualKg: totalKg,
+        grade1Kg: grade1,
+        grade2Kg: grade2,
         notes: data.notes || null,
       },
     });

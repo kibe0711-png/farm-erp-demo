@@ -182,6 +182,8 @@ model HarvestLog {
   farmPhaseId Int      @map("farm_phase_id")
   logDate     DateTime @map("log_date") @db.Date
   actualKg    Decimal  @default(0) @map("actual_kg") @db.Decimal(10, 2)
+  grade1Kg    Decimal  @default(0) @map("grade1_kg") @db.Decimal(10, 2)
+  grade2Kg    Decimal  @default(0) @map("grade2_kg") @db.Decimal(10, 2)
   notes       String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
 

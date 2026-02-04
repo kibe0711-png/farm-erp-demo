@@ -68,6 +68,8 @@ export interface HarvestLogRecord {
   farmPhaseId: number;
   logDate: string;
   actualKg: string | number;
+  grade1Kg: string | number;
+  grade2Kg: string | number;
   notes: string | null;
 }
 
@@ -302,7 +304,7 @@ interface DashboardContextValue {
   handleDeleteLaborLog: (id: number) => Promise<void>;
 
   // Harvest Logs
-  handleHarvestLogSubmit: (form: { logDate: string; actualKg: string; notes: string }, phase: Phase) => Promise<void>;
+  handleHarvestLogSubmit: (form: { logDate: string; grade1Kg: string; grade2Kg: string; notes: string }, phase: Phase) => Promise<void>;
   handleDeleteHarvestLog: (id: number) => Promise<void>;
 
   // User
@@ -616,7 +618,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   // ── Harvest Log handlers (stable refs) ────────────────────────
   const handleHarvestLogSubmit = useCallback(async (
-    form: { logDate: string; actualKg: string; notes: string },
+    form: { logDate: string; grade1Kg: string; grade2Kg: string; notes: string },
     phase: Phase
   ) => {
     const res = await fetch("/api/harvest-logs", {
@@ -625,7 +627,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({
         farmPhaseId: phase.id,
         logDate: form.logDate,
-        actualKg: parseFloat(form.actualKg) || 0,
+        grade1Kg: parseFloat(form.grade1Kg) || 0,
+        grade2Kg: parseFloat(form.grade2Kg) || 0,
         notes: form.notes || null,
       }),
     });
