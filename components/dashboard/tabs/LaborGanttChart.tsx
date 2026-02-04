@@ -293,10 +293,22 @@ export default function LaborGanttChart({
         </div>
       )}
 
-      {/* Total Mandays Summary - prominent display */}
-      <div className="bg-teal-50 border border-teal-200 rounded-lg px-5 py-4 flex items-center justify-between">
-        <span className="text-teal-800 font-medium text-base">Total Mandays</span>
-        <span className="text-2xl font-bold text-teal-700">{grandTotal.toFixed(1)}</span>
+      {/* Total Mandays Summary - prominent display with per-day breakdown */}
+      <div className="bg-teal-50 border border-teal-200 rounded-lg px-5 py-4">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-teal-800 font-medium text-base">Total Mandays</span>
+          <span className="text-2xl font-bold text-teal-700">{grandTotal.toFixed(1)}</span>
+        </div>
+        <div className="grid grid-cols-7 gap-2">
+          {DAY_LABELS.map((day, idx) => (
+            <div key={day} className="text-center">
+              <div className="text-xs text-teal-600 font-medium mb-1">{day}</div>
+              <div className={`text-sm font-bold ${dayTotals[idx] > 0 ? "text-teal-700" : "text-gray-400"}`}>
+                {dayTotals[idx] > 0 ? dayTotals[idx].toFixed(1) : "0"}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="overflow-x-auto">
