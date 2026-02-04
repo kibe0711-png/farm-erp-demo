@@ -7,6 +7,7 @@ import {
   calculateWeeksSinceSowing,
   type Phase,
 } from "../DashboardContext";
+import { isRoleAtLeast, UserRole } from "@/lib/auth/roles";
 
 export default function FeedingTab() {
   const {
@@ -17,7 +18,11 @@ export default function FeedingTab() {
     farmSummaries,
     handleFeedingSubmit,
     handleDeleteFeedingRecord,
+    user,
   } = useDashboard();
+
+  // Compliance summary is only visible to FARM_MANAGER and above
+  const canViewCompliance = user ? isRoleAtLeast(user.role, UserRole.FARM_MANAGER) : false;
 
   const [selectedFarm, setSelectedFarm] = useState<string | null>(null);
   const [selectedPhase, setSelectedPhase] = useState<Phase | null>(null);
@@ -135,8 +140,8 @@ export default function FeedingTab() {
                     </div>
                   </div>
 
-                  {/* SOP Compliance */}
-                  {hasRecords && avgCompliance !== null ? (
+                  {/* SOP Compliance - visible to FARM_MANAGER+ only */}
+                  {canViewCompliance && hasRecords && avgCompliance !== null ? (
                     <div className="mt-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm text-gray-600 font-medium">Compliance</span>
@@ -151,7 +156,7 @@ export default function FeedingTab() {
                         />
                       </div>
                     </div>
-                  ) : hasRecords ? (
+                  ) : canViewCompliance && hasRecords ? (
                     <p className="text-xs text-gray-400 mt-4">No SOP match for records</p>
                   ) : expected > 0 ? (
                     <p className="text-xs text-orange-500 mt-4 font-medium">
@@ -235,8 +240,9 @@ export default function FeedingTab() {
                     }
                   });
                   const phaseCompliance = complianceCount > 0 ? totalCompliance / complianceCount : null;
+                  // Compliance-based coloring only for FARM_MANAGER+
                   const phaseColorClass =
-                    phaseCompliance === null
+                    !canViewCompliance || phaseCompliance === null
                       ? "text-gray-700"
                       : phaseCompliance >= 95
                       ? "text-green-600 font-semibold"
@@ -416,42 +422,53 @@ export default function FeedingTab() {
 
           return (
             <>
-              <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-                <h3 className="text-sm font-medium text-blue-800 mb-3">Compliance Summary</h3>
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-blue-200">
-                      <th className="text-left py-2 px-2 font-medium text-blue-700">Product</th>
-                      <th className="text-left py-2 px-2 font-medium text-blue-700">Expected Rate/Ha</th>
-                      <th className="text-left py-2 px-2 font-medium text-blue-700">Actual Rate/Ha</th>
-                      <th className="text-left py-2 px-2 font-medium text-blue-700">Expected Qty</th>
-                      <th className="text-left py-2 px-2 font-medium text-blue-700">Actual Qty</th>
-                      <th className="text-left py-2 px-2 font-medium text-blue-700">Variance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(byProduct).map(([product, data]) => {
-                      const sop = expectedProducts.find((s) => s.products === product);
-                      const expRate = sop ? parseFloat(String(sop.rateHa)) : 0;
-                      const expQty = expRate * areaHa;
-                      const variance = expQty > 0 ? ((data.totalQty - expQty) / expQty) * 100 : 0;
-                      return (
-                        <tr key={product} className="border-b border-blue-100">
-                          <td className="py-2 px-2 font-medium">{product}</td>
-                          <td className="py-2 px-2">{expRate.toFixed(2)}</td>
-                          <td className="py-2 px-2">{data.totalRateHa.toFixed(2)}</td>
-                          <td className="py-2 px-2">{expQty.toFixed(2)}</td>
-                          <td className="py-2 px-2">{data.totalQty.toFixed(2)}</td>
-                          <td className={`py-2 px-2 font-medium ${variance > 5 ? "text-red-600" : variance < -5 ? "text-orange-600" : "text-green-600"}`}>
-                            {variance > 0 ? "+" : ""}{variance.toFixed(1)}%
-                            {variance > 5 ? " (Over)" : variance < -5 ? " (Under)" : " (OK)"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              {/* Compliance Summary - visible to FARM_MANAGER+ only */}
+              {canViewCompliance && (
+                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+                  <h3 className="text-sm font-medium text-blue-800 mb-3">Compliance Summary</h3>
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-blue-200">
+                        <th className="text-left py-2 px-2 font-medium text-blue-700">Product</th>
+                        <th className="text-left py-2 px-2 font-medium text-blue-700">Expected Rate/Ha</th>
+                        <th className="text-left py-2 px-2 font-medium text-blue-700">Actual Rate/Ha</th>
+                        <th className="text-left py-2 px-2 font-medium text-blue-700">Expected Qty</th>
+                        <th className="text-left py-2 px-2 font-medium text-blue-700">Actual Qty</th>
+                        <th className="text-left py-2 px-2 font-medium text-blue-700">Variance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(byProduct).map(([product, data]) => {
+                        // Find the SOP entry closest to the current week for this product
+                        const productSops = expectedProducts.filter((s) => s.products === product);
+                        const sop = productSops.length > 0
+                          ? productSops.reduce((closest, current) => {
+                              const closestDiff = Math.abs((closest.week ?? 0) - (weeksSinceSowing ?? 0));
+                              const currentDiff = Math.abs((current.week ?? 0) - (weeksSinceSowing ?? 0));
+                              return currentDiff < closestDiff ? current : closest;
+                            })
+                          : null;
+                        const expRate = sop ? parseFloat(String(sop.rateHa)) : 0;
+                        const expQty = expRate * areaHa;
+                        const variance = expQty > 0 ? ((data.totalQty - expQty) / expQty) * 100 : 0;
+                        return (
+                          <tr key={product} className="border-b border-blue-100">
+                            <td className="py-2 px-2 font-medium">{product}</td>
+                            <td className="py-2 px-2">{expRate.toFixed(2)}</td>
+                            <td className="py-2 px-2">{data.totalRateHa.toFixed(2)}</td>
+                            <td className="py-2 px-2">{expQty.toFixed(2)}</td>
+                            <td className="py-2 px-2">{data.totalQty.toFixed(2)}</td>
+                            <td className={`py-2 px-2 font-medium ${variance > 5 ? "text-red-600" : variance < -5 ? "text-orange-600" : "text-green-600"}`}>
+                              {variance > 0 ? "+" : ""}{variance.toFixed(1)}%
+                              {variance > 5 ? " (Over)" : variance < -5 ? " (Under)" : " (OK)"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               <div>
                 <h3 className="text-sm font-medium text-gray-700 mb-2">Feeding Records</h3>
