@@ -45,8 +45,48 @@ export default function DailyCompliance() {
   const [selectedFarm, setSelectedFarm] = useState<string | null>(null);
   const [data, setData] = useState<ComplianceData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [farmComplianceRates, setFarmComplianceRates] = useState<Record<string, number | null>>({});
 
   const weekStr = selectedMonday.toISOString().split("T")[0];
+
+  // Fetch compliance rates for all farms (for farm cards display)
+  const fetchFarmComplianceRates = useCallback(async () => {
+    const rates: Record<string, number | null> = {};
+
+    for (const farm of farmSummaries) {
+      const farmPhaseIds = phases
+        .filter((p) => p.farm === farm.farm)
+        .filter((p) => calculateWeeksSinceSowing(p.sowingDate, selectedMonday) >= 0)
+        .map((p) => p.id);
+
+      if (farmPhaseIds.length === 0) {
+        rates[farm.farm] = null;
+        continue;
+      }
+
+      try {
+        const res = await fetch(
+          `/api/compliance?farmPhaseIds=${farmPhaseIds.join(",")}&weekStart=${weekStr}`
+        );
+        if (res.ok) {
+          const complianceData: ComplianceData = await res.json();
+          rates[farm.farm] = complianceData.summary.complianceRate;
+        } else {
+          rates[farm.farm] = null;
+        }
+      } catch {
+        rates[farm.farm] = null;
+      }
+    }
+
+    setFarmComplianceRates(rates);
+  }, [farmSummaries, phases, selectedMonday, weekStr]);
+
+  useEffect(() => {
+    if (!selectedFarm && farmSummaries.length > 0) {
+      fetchFarmComplianceRates();
+    }
+  }, [fetchFarmComplianceRates, selectedFarm, farmSummaries.length]);
 
   const farmPhaseIds = selectedFarm
     ? phases
@@ -134,21 +174,59 @@ export default function DailyCompliance() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {farmSummaries.map((farm) => (
-                <button
-                  key={farm.farm}
-                  onClick={() => setSelectedFarm(farm.farm)}
-                  className="bg-white rounded-lg border border-gray-200 p-6 text-left hover:border-orange-300 hover:shadow-md transition-all"
-                >
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{farm.farm}</h3>
-                  <p className="text-2xl font-bold text-orange-600">
-                    {farm.totalAcreage.toFixed(2)} Ha
-                  </p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {farm.phaseCount} phase{farm.phaseCount !== 1 ? "s" : ""}
-                  </p>
-                </button>
-              ))}
+              {farmSummaries.map((farm) => {
+                const rate = farmComplianceRates[farm.farm];
+                const hasRate = rate !== null && rate !== undefined;
+                const rateColor = hasRate
+                  ? rate >= 80
+                    ? "text-green-600"
+                    : rate >= 50
+                    ? "text-yellow-600"
+                    : "text-red-600"
+                  : "text-gray-400";
+                const borderColor = hasRate
+                  ? rate >= 80
+                    ? "hover:border-green-300"
+                    : rate >= 50
+                    ? "hover:border-yellow-300"
+                    : "hover:border-red-300"
+                  : "hover:border-orange-300";
+
+                return (
+                  <button
+                    key={farm.farm}
+                    onClick={() => setSelectedFarm(farm.farm)}
+                    className={`bg-white rounded-lg border border-gray-200 p-6 text-left ${borderColor} hover:shadow-md transition-all`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="text-lg font-semibold text-gray-900">{farm.farm}</h3>
+                      {hasRate && (
+                        <span className={`text-xl font-bold ${rateColor}`}>
+                          {rate}%
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-2xl font-bold text-orange-600">
+                      {farm.totalAcreage.toFixed(2)} Ha
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {farm.phaseCount} phase{farm.phaseCount !== 1 ? "s" : ""}
+                    </p>
+                    {hasRate && (
+                      <div className="mt-3">
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              rate >= 80 ? "bg-green-500" : rate >= 50 ? "bg-yellow-500" : "bg-red-500"
+                            }`}
+                            style={{ width: `${Math.min(100, rate)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </>
