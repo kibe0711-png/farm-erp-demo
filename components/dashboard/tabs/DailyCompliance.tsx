@@ -12,6 +12,7 @@ interface ComplianceEntry {
   type: "labor" | "nutri" | "harvest";
   farmPhaseId: number;
   phaseId: string;
+  cropCode: string;
   farm: string;
   task: string;
   dayOfWeek: number;
@@ -131,6 +132,7 @@ export default function DailyCompliance() {
                 key,
                 type: entry.type,
                 phaseId: entry.phaseId,
+                cropCode: entry.cropCode,
                 task: entry.task,
                 days: {} as Record<number, Status>,
               };
@@ -138,7 +140,7 @@ export default function DailyCompliance() {
             acc[key].days[entry.dayOfWeek] = entry.status;
             return acc;
           },
-          {} as Record<string, { key: string; type: "labor" | "nutri" | "harvest"; phaseId: string; task: string; days: Record<number, Status> }>
+          {} as Record<string, { key: string; type: "labor" | "nutri" | "harvest"; phaseId: string; cropCode: string; task: string; days: Record<number, Status> }>
         )
       )
     : [];
@@ -293,6 +295,7 @@ export default function DailyCompliance() {
                   <thead>
                     <tr className="border-b border-gray-300 bg-gray-50">
                       <th className="text-left py-2 px-3 font-medium text-gray-700 min-w-[60px]">Type</th>
+                      <th className="text-left py-2 px-2 font-medium text-gray-700 min-w-[50px]">Crop</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-700 min-w-[80px]">Phase</th>
                       <th className="text-left py-2 px-3 font-medium text-gray-700 min-w-[150px]">Task</th>
                       {DAY_LABELS.map((day) => (
@@ -323,6 +326,11 @@ export default function DailyCompliance() {
                               {row.type === "labor" ? "Labor" : row.type === "nutri" ? "Nutri" : "Harvest"}
                             </span>
                           </td>
+                          <td className="py-2 px-2">
+                            <span className="inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700">
+                              {row.cropCode}
+                            </span>
+                          </td>
                           <td className="py-2 px-3 text-gray-800 font-medium text-xs">{row.phaseId}</td>
                           <td className="py-2 px-3 text-gray-700 text-xs">{row.task}</td>
                           {DAY_LABELS.map((_, dayIdx) => {
@@ -349,7 +357,7 @@ export default function DailyCompliance() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-gray-300 bg-gray-50">
-                      <td colSpan={3} className="py-2 px-3 font-semibold text-gray-700 text-xs">
+                      <td colSpan={4} className="py-2 px-3 font-semibold text-gray-700 text-xs">
                         Daily Summary
                       </td>
                       {daySummaries.map((ds, idx) => (

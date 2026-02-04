@@ -51,7 +51,7 @@ export async function GET(request: Request) {
         prisma.nutriSop.findMany(),
         prisma.farmPhase.findMany({
           where: { id: { in: farmPhaseIds } },
-          select: { id: true, phaseId: true, farm: true },
+          select: { id: true, phaseId: true, farm: true, cropCode: true },
         }),
       ]);
 
@@ -89,6 +89,7 @@ export async function GET(request: Request) {
       type: "labor" | "nutri" | "harvest";
       farmPhaseId: number;
       phaseId: string;
+      cropCode: string;
       farm: string;
       task: string;
       dayOfWeek: number;
@@ -144,6 +145,7 @@ export async function GET(request: Request) {
         type: "labor",
         farmPhaseId: sched.farmPhaseId,
         phaseId: phase.phaseId,
+        cropCode: phase.cropCode,
         farm: phase.farm,
         task: sop.task,
         dayOfWeek: sched.dayOfWeek,
@@ -162,6 +164,7 @@ export async function GET(request: Request) {
         type: "nutri",
         farmPhaseId: sched.farmPhaseId,
         phaseId: phase.phaseId,
+        cropCode: phase.cropCode,
         farm: phase.farm,
         task: sop.products,
         dayOfWeek: sched.dayOfWeek,
@@ -179,6 +182,7 @@ export async function GET(request: Request) {
         type: "harvest",
         farmPhaseId: sched.farmPhaseId,
         phaseId: phase.phaseId,
+        cropCode: phase.cropCode,
         farm: phase.farm,
         task: "Harvest",
         dayOfWeek: sched.dayOfWeek,
