@@ -23,6 +23,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (user.status === "PENDING") {
+      return NextResponse.json(
+        { error: "Your account is pending admin approval.", pending: true },
+        { status: 403 }
+      );
+    }
+
     if (user.status !== "ACTIVE") {
       return NextResponse.json(
         { error: "Account is not active. Contact your administrator." },

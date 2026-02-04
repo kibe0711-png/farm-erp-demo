@@ -7,6 +7,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -26,6 +27,9 @@ export default function LoginPage() {
 
       if (res.ok) {
         router.push("/dashboard");
+      } else if (data.pending) {
+        setPending(true);
+        setError("");
       } else {
         setError(data.error || "Invalid credentials");
       }
@@ -72,6 +76,13 @@ export default function LoginPage() {
             />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
+          {pending && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-800">
+                Your account is pending admin approval. Please check back later.
+              </p>
+            </div>
+          )}
           <button
             type="submit"
             disabled={loading}

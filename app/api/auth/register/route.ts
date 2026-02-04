@@ -31,32 +31,18 @@ export async function POST(request: Request) {
 
     const hashedPassword = await hashPassword(password);
 
+    // Create user with PENDING status — requires admin approval
     const user = await prisma.user.create({
-      data: { email, name, password: hashedPassword },
+      data: { email, name, password: hashedPassword, status: "PENDING" },
     });
 
-    const token = await signToken({
-      userId: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      tokenVersion: user.tokenVersion,
-    });
-
-    const response = NextResponse.json({
+    // Return success but do NOT issue a token — user must wait for approval
+    return NextResponse.json({
       success: true,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      pending: true,
+      message: "Registration successful. Your account is pending admin approval.",
+      user: { id: user.id, email: user.email, name: user.name },
     });
-
-    response.cookies.set("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24,
-      path: "/",
-    });
-
-    return response;
   } catch (error) {
     console.error("Registration error:", error);
     return NextResponse.json({ error: "Registration failed" }, { status: 500 });

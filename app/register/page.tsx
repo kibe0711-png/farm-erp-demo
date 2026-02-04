@@ -9,6 +9,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pending, setPending] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,7 +27,11 @@ export default function RegisterPage() {
       const data = await res.json();
 
       if (res.ok) {
-        router.push("/dashboard");
+        if (data.pending) {
+          setPending(true);
+        } else {
+          router.push("/dashboard");
+        }
       } else {
         setError(data.error || "Registration failed");
       }
@@ -36,6 +41,35 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
+
+  if (pending) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-full max-w-sm p-8 bg-white rounded-lg shadow-sm border border-gray-200 text-center">
+          <div className="flex justify-center mb-6">
+            <Image src="/souk-circle.png" alt="Souk FarmIQ" width={80} height={80} priority />
+          </div>
+          <div className="mb-4">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-yellow-100 flex items-center justify-center">
+              <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Account Pending Approval</h2>
+            <p className="text-sm text-gray-600">
+              Your registration was successful. An administrator will review and approve your account.
+            </p>
+          </div>
+          <a
+            href="/"
+            className="inline-block mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium"
+          >
+            Return to login
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">

@@ -12,7 +12,7 @@ interface UserItem {
   createdAt: string;
 }
 
-const STATUS_OPTIONS = ["ACTIVE", "INACTIVE", "SUSPENDED"];
+const STATUS_OPTIONS = ["ACTIVE", "INACTIVE", "SUSPENDED", "PENDING"];
 
 const ROLE_COLORS: Record<string, string> = {
   ADMIN: "bg-red-100 text-red-700",
@@ -26,6 +26,7 @@ const STATUS_COLORS: Record<string, string> = {
   ACTIVE: "bg-green-100 text-green-700",
   INACTIVE: "bg-gray-100 text-gray-500",
   SUSPENDED: "bg-red-100 text-red-700",
+  PENDING: "bg-yellow-100 text-yellow-700",
 };
 
 export default function UsersManagement() {
@@ -35,6 +36,7 @@ export default function UsersManagement() {
   const [editRole, setEditRole] = useState("");
   const [editStatus, setEditStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
   const fetchUsers = useCallback(async () => {
@@ -95,6 +97,32 @@ export default function UsersManagement() {
     }
   };
 
+  const approveUser = async (userId: number) => {
+    setApprovingId(userId);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: userId, status: "ACTIVE" }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to approve user");
+      }
+    } catch {
+      setError("Failed to approve user");
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const pendingUsers = users.filter((u) => u.status === "PENDING");
+
   if (loading) {
     return <div className="text-sm text-gray-500 py-8 text-center">Loading users...</div>;
   }
@@ -111,6 +139,43 @@ export default function UsersManagement() {
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
           {error}
+        </div>
+      )}
+
+      {/* Pending Approvals Section */}
+      {pendingUsers.length > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-yellow-800 mb-3">
+            Pending Approvals ({pendingUsers.length})
+          </h3>
+          <div className="space-y-2">
+            {pendingUsers.map((user) => (
+              <div
+                key={user.id}
+                className="flex items-center justify-between bg-white rounded-lg px-4 py-3 border border-yellow-200"
+              >
+                <div>
+                  <p className="font-medium text-gray-900">{user.name}</p>
+                  <p className="text-sm text-gray-500">{user.email}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => approveUser(user.id)}
+                    disabled={approvingId === user.id}
+                    className="bg-green-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {approvingId === user.id ? "Approving..." : "Approve"}
+                  </button>
+                  <button
+                    onClick={() => startEdit(user)}
+                    className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded text-sm font-medium hover:bg-gray-200"
+                  >
+                    Edit
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
