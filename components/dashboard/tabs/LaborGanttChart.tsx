@@ -293,6 +293,12 @@ export default function LaborGanttChart({
         </div>
       )}
 
+      {/* Total Mandays Summary - prominent display */}
+      <div className="bg-teal-50 border border-teal-200 rounded-lg px-5 py-4 flex items-center justify-between">
+        <span className="text-teal-800 font-medium text-base">Total Mandays</span>
+        <span className="text-2xl font-bold text-teal-700">{grandTotal.toFixed(1)}</span>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse table-fixed">
           <thead>
