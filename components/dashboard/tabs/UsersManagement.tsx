@@ -9,7 +9,14 @@ interface UserItem {
   name: string;
   role: string;
   status: string;
+  assignedFarmId: number | null;
+  assignedFarm: { name: string } | null;
   createdAt: string;
+}
+
+interface Farm {
+  id: number;
+  name: string;
 }
 
 const STATUS_OPTIONS = ["ACTIVE", "INACTIVE", "SUSPENDED", "PENDING"];
@@ -31,10 +38,12 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function UsersManagement() {
   const [users, setUsers] = useState<UserItem[]>([]);
+  const [farms, setFarms] = useState<Farm[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editRole, setEditRole] = useState("");
   const [editStatus, setEditStatus] = useState("");
+  const [editFarmId, setEditFarmId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -55,14 +64,27 @@ export default function UsersManagement() {
     }
   }, []);
 
+  const fetchFarms = useCallback(async () => {
+    try {
+      const res = await fetch("/api/farms");
+      if (res.ok) {
+        setFarms(await res.json());
+      }
+    } catch {
+      console.error("Failed to load farms");
+    }
+  }, []);
+
   useEffect(() => {
     fetchUsers();
-  }, [fetchUsers]);
+    fetchFarms();
+  }, [fetchUsers, fetchFarms]);
 
   const startEdit = (user: UserItem) => {
     setEditingId(user.id);
     setEditRole(user.role);
     setEditStatus(user.status);
+    setEditFarmId(user.assignedFarmId);
     setError("");
   };
 
@@ -79,7 +101,12 @@ export default function UsersManagement() {
       const res = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: editingId, role: editRole, status: editStatus }),
+        body: JSON.stringify({
+          id: editingId,
+          role: editRole,
+          status: editStatus,
+          assignedFarmId: editFarmId,
+        }),
       });
 
       if (res.ok) {
@@ -187,6 +214,7 @@ export default function UsersManagement() {
                 <th className="text-left py-3 px-4 font-medium text-gray-700">Name</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-700">Email</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-700">Role</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-700">Assigned Farm</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-700">Joined</th>
                 <th className="text-right py-3 px-4 font-medium text-gray-700">Actions</th>
@@ -213,6 +241,28 @@ export default function UsersManagement() {
                     ) : (
                       <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[user.role] ?? "bg-gray-100 text-gray-700"}`}>
                         {ROLE_LABELS[user.role as UserRoleType] ?? user.role}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4">
+                    {editingId === user.id ? (
+                      <select
+                        value={editFarmId ?? ""}
+                        onChange={(e) => setEditFarmId(e.target.value ? Number(e.target.value) : null)}
+                        className="border border-gray-300 rounded px-2 py-1 text-sm"
+                      >
+                        <option value="">No farm assigned</option>
+                        {farms.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-sm text-gray-600">
+                        {user.assignedFarm?.name || (
+                          <span className="text-gray-400 italic">Not assigned</span>
+                        )}
                       </span>
                     )}
                   </td>
