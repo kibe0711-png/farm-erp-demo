@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { withAnalytics } from "@/lib/analytics/api-middleware";
 
 // GET ?farmPhaseIds=1,2,3&weekStart=2026-01-26
 // Returns all scheduled tasks for the week with their compliance status
-export async function GET(request: Request) {
+export const GET = withAnalytics(async (request: Request) => {
   try {
     const { searchParams } = new URL(request.url);
     const idsParam = searchParams.get("farmPhaseIds");
@@ -204,4 +205,4 @@ export async function GET(request: Request) {
     console.error("Failed to fetch compliance:", error);
     return NextResponse.json({ error: "Failed to fetch compliance" }, { status: 500 });
   }
-}
+});

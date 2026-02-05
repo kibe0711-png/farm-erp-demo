@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth/getAuthUser";
 import { hasPermission, Permission } from "@/lib/auth/roles";
+import { withAnalytics } from "@/lib/analytics/api-middleware";
 
 function parseDate(dateStr: string): Date {
   if (!dateStr) return new Date();
@@ -21,7 +22,7 @@ function parseDate(dateStr: string): Date {
   return new Date(dateStr);
 }
 
-export async function GET() {
+export const GET = withAnalytics(async () => {
   try {
     const phases = await prisma.farmPhase.findMany({
       orderBy: { createdAt: "desc" },
@@ -31,9 +32,9 @@ export async function GET() {
     console.error("Failed to fetch phases:", error);
     return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withAnalytics(async (request: Request) => {
   try {
     const data = await request.json();
 
@@ -118,9 +119,9 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Failed to upload data";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});
 
-export async function PATCH(request: Request) {
+export const PATCH = withAnalytics(async (request: Request) => {
   try {
     const authUser = await getAuthUser();
     if (!authUser || !hasPermission(authUser.role, Permission.MANAGE_CROPS)) {
@@ -159,9 +160,9 @@ export async function PATCH(request: Request) {
     console.error("Failed to update phase:", error);
     return NextResponse.json({ error: "Failed to update phase" }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(request: Request) {
+export const DELETE = withAnalytics(async (request: Request) => {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
@@ -185,4 +186,4 @@ export async function DELETE(request: Request) {
     console.error("Failed to delete phases:", error);
     return NextResponse.json({ error: "Failed to delete data" }, { status: 500 });
   }
-}
+});

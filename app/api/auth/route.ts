@@ -17,6 +17,19 @@ export async function POST(request: Request) {
     const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user || !(await verifyPassword(password, user.password))) {
+      // Track failed login attempt
+      await prisma.analyticsEvent.create({
+        data: {
+          eventType: "login",
+          eventName: "login_failed",
+          userId: null,
+          userRole: null,
+          metadata: { email },
+        },
+      }).catch(() => {
+        // Silently fail if analytics logging fails
+      });
+
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
@@ -37,12 +50,42 @@ export async function POST(request: Request) {
       );
     }
 
+    // Extract IP address and user agent
+    const ipAddress = request.headers.get("x-forwarded-for")?.split(",")[0] ||
+                      request.headers.get("x-real-ip") ||
+                      "unknown";
+    const userAgent = request.headers.get("user-agent") || null;
+
+    // Create user session record
+    const session = await prisma.userSession.create({
+      data: {
+        userId: user.id,
+        loginAt: new Date(),
+        ipAddress,
+        userAgent,
+      },
+    }).catch(() => null); // Don't fail login if session tracking fails
+
+    // Track successful login event
+    await prisma.analyticsEvent.create({
+      data: {
+        eventType: "login",
+        eventName: "login_success",
+        userId: user.id,
+        userRole: user.role,
+        metadata: { sessionId: session?.id },
+      },
+    }).catch(() => {
+      // Silently fail if analytics logging fails
+    });
+
     const token = await signToken({
       userId: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
       tokenVersion: user.tokenVersion,
+      sessionId: session?.id, // Include session ID in token for logout tracking
     });
 
     const response = NextResponse.json({

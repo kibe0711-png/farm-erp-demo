@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { verifyToken } from "@/lib/jwt";
 import { hasPermission, Permission } from "@/lib/auth/roles";
+import { withAnalytics } from "@/lib/analytics/api-middleware";
 
 async function getAuthUser() {
   const cookieStore = await cookies();
@@ -21,7 +22,7 @@ async function getAuthUser() {
 }
 
 // GET — list all users (requires MANAGE_USERS permission)
-export async function GET() {
+export const GET = withAnalytics(async () => {
   try {
     const authUser = await getAuthUser();
     if (!authUser || !hasPermission(authUser.role, Permission.MANAGE_USERS)) {
@@ -47,10 +48,10 @@ export async function GET() {
     console.error("Failed to fetch users:", error);
     return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 });
   }
-}
+});
 
 // PATCH — update a user's role or status (requires MANAGE_USERS permission)
-export async function PATCH(request: Request) {
+export const PATCH = withAnalytics(async (request: Request) => {
   try {
     const authUser = await getAuthUser();
     if (!authUser || !hasPermission(authUser.role, Permission.MANAGE_USERS)) {
@@ -103,4 +104,4 @@ export async function PATCH(request: Request) {
     console.error("Failed to update user:", error);
     return NextResponse.json({ error: "Failed to update user" }, { status: 500 });
   }
-}
+});

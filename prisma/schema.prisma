@@ -125,16 +125,17 @@ model PhaseActivityOverride {
 }
 
 model User {
-  id              Int      @id @default(autoincrement())
-  email           String   @unique @db.VarChar(255)
-  name            String   @db.VarChar(100)
-  password        String   @db.Text
-  role            String   @default("FARM_CLERK") @db.VarChar(30)
-  status          String   @default("ACTIVE") @db.VarChar(20)
-  tokenVersion    Int      @default(0) @map("token_version")
-  assignedFarmId  Int?     @map("assigned_farm_id")
-  assignedFarm    Farm?    @relation(fields: [assignedFarmId], references: [id])
-  createdAt       DateTime @default(now()) @map("created_at")
+  id              Int           @id @default(autoincrement())
+  email           String        @unique @db.VarChar(255)
+  name            String        @db.VarChar(100)
+  password        String        @db.Text
+  role            String        @default("FARM_CLERK") @db.VarChar(30)
+  status          String        @default("ACTIVE") @db.VarChar(20)
+  tokenVersion    Int           @default(0) @map("token_version")
+  assignedFarmId  Int?          @map("assigned_farm_id")
+  assignedFarm    Farm?         @relation(fields: [assignedFarmId], references: [id])
+  sessions        UserSession[]
+  createdAt       DateTime      @default(now()) @map("created_at")
 
   @@map("users")
 }
@@ -191,4 +192,49 @@ model HarvestLog {
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("harvest_logs")
+}
+
+model AnalyticsEvent {
+  id        Int      @id @default(autoincrement())
+  eventType String   @db.VarChar(50)
+  eventName String   @db.VarChar(100)
+  userId    Int?
+  userRole  String?  @db.VarChar(30)
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([eventType, createdAt])
+  @@index([eventName, createdAt])
+  @@map("analytics_events")
+}
+
+model ApiPerformanceLog {
+  id           Int      @id @default(autoincrement())
+  endpoint     String   @db.VarChar(200)
+  method       String   @db.VarChar(10)
+  statusCode   Int      @map("status_code")
+  responseTime Int      @map("response_time")
+  userId       Int?     @map("user_id")
+  errorMessage String?  @map("error_message") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([endpoint, createdAt])
+  @@index([statusCode, createdAt])
+  @@index([responseTime])
+  @@map("api_performance_logs")
+}
+
+model UserSession {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  user      User      @relation(fields: [userId], references: [id])
+  loginAt   DateTime  @map("login_at")
+  logoutAt  DateTime? @map("logout_at")
+  duration  Int?
+  ipAddress String?   @map("ip_address") @db.VarChar(50)
+  userAgent String?   @map("user_agent") @db.Text
+
+  @@index([userId, loginAt])
+  @@map("user_sessions")
 }

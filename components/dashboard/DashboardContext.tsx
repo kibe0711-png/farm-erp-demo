@@ -712,6 +712,11 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   // ── Logout (stable ref) ───────────────────────────────────────
   const handleLogout = useCallback(async () => {
+    // Track logout event (will capture session duration on server side)
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {
+      // Silently fail if tracking fails
+    });
+
     await fetch("/api/auth", { method: "DELETE" });
     setUser(null);
     window.location.href = "/";

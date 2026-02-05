@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { withAnalytics } from "@/lib/analytics/api-middleware";
 
-export async function GET() {
+export const GET = withAnalytics(async () => {
   try {
     const records = await prisma.harvestLog.findMany({
       orderBy: { createdAt: "desc" },
@@ -11,9 +12,9 @@ export async function GET() {
     console.error("Failed to fetch harvest logs:", error);
     return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withAnalytics(async (request: Request) => {
   try {
     const data = await request.json();
 
@@ -39,9 +40,9 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Failed to create record";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(request: Request) {
+export const DELETE = withAnalytics(async (request: Request) => {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
@@ -59,4 +60,4 @@ export async function DELETE(request: Request) {
     console.error("Failed to delete harvest log:", error);
     return NextResponse.json({ error: "Failed to delete data" }, { status: 500 });
   }
-}
+});

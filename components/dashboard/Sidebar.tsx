@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useDashboard } from "./DashboardContext";
 import { ROLE_LABELS, type UserRoleType } from "@/lib/auth/roles";
 
-export type SidebarTab = "phases" | "labor" | "nutri" | "keyInputs" | "operations" | "ipp" | "guide" | "settings" | "users";
+export type SidebarTab = "phases" | "labor" | "nutri" | "keyInputs" | "operations" | "ipp" | "guide" | "settings" | "users" | "analytics";
 
 interface SidebarProps {
   activeSection: SidebarTab;
@@ -185,6 +185,18 @@ export default function Sidebar({ activeSection, onSectionChange, collapsed, onT
               title={collapsed ? "Users Management" : undefined}
             >
               {collapsed ? "U" : "Users Management"}
+            </button>
+            <button
+              onClick={() => onSectionChange("analytics")}
+              className={`flex items-center gap-3 w-full px-4 py-2.5 mx-2 rounded-lg text-sm transition-colors ${
+                activeSection === "analytics"
+                  ? "bg-violet-50 text-violet-700 font-medium"
+                  : "text-gray-600 hover:bg-gray-50"
+              }`}
+              style={{ width: "calc(100% - 16px)" }}
+              title={collapsed ? "Analytics" : undefined}
+            >
+              {collapsed ? "A" : "Analytics"}
             </button>
           </>
         )}
