@@ -11,7 +11,14 @@ export async function getAuthUser() {
 
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
-    select: { id: true, role: true, status: true, tokenVersion: true },
+    select: {
+      id: true,
+      role: true,
+      status: true,
+      tokenVersion: true,
+      assignedFarmId: true,
+      assignedFarm: { select: { name: true } },
+    },
   });
 
   if (!user || user.status !== "ACTIVE" || user.tokenVersion !== payload.tokenVersion) return null;

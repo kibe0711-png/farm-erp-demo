@@ -20,7 +20,16 @@ export async function GET() {
   // Verify tokenVersion against DB to support session invalidation
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
-    select: { id: true, email: true, name: true, role: true, status: true, tokenVersion: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      status: true,
+      tokenVersion: true,
+      assignedFarmId: true,
+      assignedFarm: { select: { name: true } },
+    },
   });
 
   if (!user || user.status !== "ACTIVE" || user.tokenVersion !== payload.tokenVersion) {
@@ -33,6 +42,8 @@ export async function GET() {
       email: user.email,
       name: user.name,
       role: user.role,
+      assignedFarmId: user.assignedFarmId,
+      assignedFarmName: user.assignedFarm?.name ?? null,
     },
   });
 }

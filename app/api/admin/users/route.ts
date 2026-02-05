@@ -35,6 +35,8 @@ export async function GET() {
         name: true,
         role: true,
         status: true,
+        assignedFarmId: true,
+        assignedFarm: { select: { name: true } },
         createdAt: true,
       },
       orderBy: { createdAt: "desc" },
@@ -55,7 +57,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const { id, role, status } = await request.json();
+    const { id, role, status, assignedFarmId } = await request.json();
 
     if (!id) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 });
@@ -72,11 +74,12 @@ export async function PATCH(request: Request) {
     }
 
     const updateData: Record<string, unknown> = {};
-    if (role) updateData.role = role;
-    if (status) updateData.status = status;
+    if (role !== undefined) updateData.role = role;
+    if (status !== undefined) updateData.status = status;
+    if (assignedFarmId !== undefined) updateData.assignedFarmId = assignedFarmId;
 
-    // Increment tokenVersion to invalidate existing sessions when role or status changes
-    if (role || status) {
+    // Increment tokenVersion to invalidate existing sessions when role, status, or farm changes
+    if (role !== undefined || status !== undefined || assignedFarmId !== undefined) {
       updateData.tokenVersion = { increment: 1 };
     }
 
@@ -89,6 +92,8 @@ export async function PATCH(request: Request) {
         name: true,
         role: true,
         status: true,
+        assignedFarmId: true,
+        assignedFarm: { select: { name: true } },
         createdAt: true,
       },
     });

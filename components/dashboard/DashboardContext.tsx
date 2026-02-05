@@ -84,6 +84,8 @@ export interface AuthUser {
   email: string;
   name: string;
   role: string;
+  assignedFarmId: number | null;
+  assignedFarmName: string | null;
 }
 
 export interface KeyInputItem {
@@ -356,13 +358,30 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const res = await fetch("/api/phases");
-      if (res.ok) setPhases(await res.json());
+      if (res.ok) {
+        const allPhases = await res.json();
+
+        // Filter phases by farm access
+        // AUDITOR and ADMIN see all farms, others see only their assigned farm
+        if (user && user.role !== "ADMIN" && user.role !== "AUDITOR") {
+          const assignedFarm = user.assignedFarmName;
+          if (assignedFarm) {
+            setPhases(allPhases.filter((p: Phase) => p.farm === assignedFarm));
+          } else {
+            // User has no assigned farm - show nothing
+            setPhases([]);
+          }
+        } else {
+          // ADMIN or AUDITOR - show all phases
+          setPhases(allPhases);
+        }
+      }
     } catch (error) {
       console.error("Failed to fetch phases:", error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   const fetchLaborSop = useCallback(async () => {
     setLoading(true);
@@ -449,18 +468,24 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Initial fetch
+  // Initial fetch - user first
   useEffect(() => {
     fetchUser();
-    fetchPhases();
-    fetchLaborSop();
-    fetchNutriSop();
-    fetchKeyInputs();
-    fetchFeedingRecords();
-    fetchLaborLogs();
-    fetchHarvestLogs();
-    fetchFarms();
-  }, [fetchUser, fetchPhases, fetchLaborSop, fetchNutriSop, fetchKeyInputs, fetchFeedingRecords, fetchLaborLogs, fetchHarvestLogs, fetchFarms]);
+  }, [fetchUser]);
+
+  // Fetch data after user is loaded (phases depend on user's farm access)
+  useEffect(() => {
+    if (user) {
+      fetchPhases();
+      fetchLaborSop();
+      fetchNutriSop();
+      fetchKeyInputs();
+      fetchFeedingRecords();
+      fetchLaborLogs();
+      fetchHarvestLogs();
+      fetchFarms();
+    }
+  }, [user, fetchPhases, fetchLaborSop, fetchNutriSop, fetchKeyInputs, fetchFeedingRecords, fetchLaborLogs, fetchHarvestLogs, fetchFarms]);
 
   // ── Upload handlers (stable refs) ───────────────────────────────
   const handlePhaseUpload = useCallback(async (data: Record<string, string>[]) => {
