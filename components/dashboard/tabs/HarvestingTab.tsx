@@ -28,55 +28,8 @@ export default function HarvestingTab() {
 
   const [selectedFarm, setSelectedFarm] = useState<string | null>(null);
 
-  // This will be populated after fetching schedules - phases with pledges > 0 kg
-  const [harvestingPhases, setHarvestingPhases] = useState<typeof phases>([]);
-
-  // Fetch schedules and filter to only phases with harvest pledges > 0 kg for this week
-  useEffect(() => {
-    const fetchHarvestingPhases = async () => {
-      if (phases.length === 0) {
-        setHarvestingPhases([]);
-        return;
-      }
-
-      const weekStr = selectedMonday.toISOString().split("T")[0];
-      const allPhaseIds = phases.map((p) => p.id);
-
-      try {
-        const res = await fetch(
-          `/api/harvest-schedule?farmPhaseIds=${allPhaseIds.join(",")}&weekStart=${weekStr}`
-        );
-
-        if (!res.ok) {
-          setHarvestingPhases([]);
-          return;
-        }
-
-        const entries: ApiEntry[] = await res.json();
-
-        // Calculate total kg per phase for this week
-        const phaseKgMap = new Map<number, number>();
-        entries.forEach((e) => {
-          const kg = e.pledgeKg != null ? Number(e.pledgeKg) : 0;
-          if (!isNaN(kg)) {
-            phaseKgMap.set(e.farmPhaseId, (phaseKgMap.get(e.farmPhaseId) || 0) + kg);
-          }
-        });
-
-        // Filter phases with total kg > 0
-        const phasesWithPledges = phases.filter((p) => (phaseKgMap.get(p.id) || 0) > 0);
-        setHarvestingPhases(phasesWithPledges);
-      } catch (error) {
-        console.error("Failed to fetch harvest schedules:", error);
-        setHarvestingPhases([]);
-      }
-    };
-
-    fetchHarvestingPhases();
-  }, [phases, selectedMonday]);
-
   const farmPhases = selectedFarm
-    ? harvestingPhases.filter((p) => p.farm === selectedFarm)
+    ? phases.filter((p) => p.farm === selectedFarm)
     : [];
 
   const farmPhaseIds = farmPhases.map((p) => p.id);
@@ -89,12 +42,12 @@ export default function HarvestingTab() {
 
   // Master download function for all farms
   const downloadAllFarmsPDF = async () => {
-    if (harvestingPhases.length === 0) return;
+    if (phases.length === 0) return;
 
     const weekStr = selectedMonday.toISOString().split("T")[0];
 
-    // Fetch all schedules for harvesting phases
-    const allPhaseIds = harvestingPhases.map((p) => p.id);
+    // Fetch all schedules
+    const allPhaseIds = phases.map((p) => p.id);
     const res = await fetch(
       `/api/harvest-schedule?farmPhaseIds=${allPhaseIds.join(",")}&weekStart=${weekStr}`
     );
@@ -116,9 +69,25 @@ export default function HarvestingTab() {
       scheduleMap.get(e.farmPhaseId)!.set(e.dayOfWeek, isNaN(kg as number) ? null : kg);
     });
 
+    // Calculate total kg per phase and filter to only phases with pledges > 0
+    const phaseKgMap = new Map<number, number>();
+    entries.forEach((e) => {
+      const kg = e.pledgeKg != null ? Number(e.pledgeKg) : 0;
+      if (!isNaN(kg)) {
+        phaseKgMap.set(e.farmPhaseId, (phaseKgMap.get(e.farmPhaseId) || 0) + kg);
+      }
+    });
+
+    const phasesWithPledges = phases.filter((p) => (phaseKgMap.get(p.id) || 0) > 0);
+
+    if (phasesWithPledges.length === 0) {
+      alert("No phases with pledges for this week");
+      return;
+    }
+
     // Group phases by farm, then by crop code
-    const farmGroups = new Map<string, Map<string, typeof harvestingPhases>>();
-    harvestingPhases.forEach((phase) => {
+    const farmGroups = new Map<string, Map<string, typeof phasesWithPledges>>();
+    phasesWithPledges.forEach((phase) => {
       if (!farmGroups.has(phase.farm)) {
         farmGroups.set(phase.farm, new Map());
       }
@@ -162,7 +131,7 @@ export default function HarvestingTab() {
 
     // Iterate through farms
     for (const [farmName, cropGroups] of Array.from(farmGroups.entries()).sort()) {
-      const farmPhases = harvestingPhases.filter((p) => p.farm === farmName);
+      const farmPhases = phasesWithPledges.filter((p) => p.farm === farmName);
 
       // Calculate total kg for this farm
       let farmTotalKg = 0;
@@ -288,41 +257,31 @@ export default function HarvestingTab() {
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">
-                {harvestingPhases.length} phase{harvestingPhases.length !== 1 ? "s" : ""} currently harvesting
-              </p>
+            <div className="flex items-center justify-end mb-4">
               <button
                 onClick={downloadAllFarmsPDF}
-                disabled={harvestingPhases.length === 0}
-                className="bg-amber-700 text-white px-4 py-2 rounded text-sm font-medium hover:bg-amber-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-amber-700 text-white px-4 py-2 rounded text-sm font-medium hover:bg-amber-800"
               >
                 Download All Farms PDF
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {farmSummaries.map((farm) => {
-                const harvestingCount = harvestingPhases.filter((p) => p.farm === farm.farm).length;
-                return (
-                  <button
-                    key={farm.farm}
-                    onClick={() => setSelectedFarm(farm.farm)}
-                    className="bg-white rounded-lg border border-gray-200 p-6 text-left hover:border-amber-300 hover:shadow-md transition-all"
-                  >
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">{farm.farm}</h3>
-                    <p className="text-2xl font-bold text-green-600">
-                      {farm.totalAcreage.toFixed(2)} Ha
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {farm.phaseCount} phase{farm.phaseCount !== 1 ? "s" : ""} total
-                    </p>
-                    <p className="text-sm text-amber-600 font-medium mt-1">
-                      {harvestingCount} harvesting
-                    </p>
-                  </button>
-                );
-              })}
+              {farmSummaries.map((farm) => (
+                <button
+                  key={farm.farm}
+                  onClick={() => setSelectedFarm(farm.farm)}
+                  className="bg-white rounded-lg border border-gray-200 p-6 text-left hover:border-amber-300 hover:shadow-md transition-all"
+                >
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{farm.farm}</h3>
+                  <p className="text-2xl font-bold text-green-600">
+                    {farm.totalAcreage.toFixed(2)} Ha
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {farm.phaseCount} phase{farm.phaseCount !== 1 ? "s" : ""}
+                  </p>
+                </button>
+              ))}
             </div>
           </>
         )}
@@ -346,9 +305,6 @@ export default function HarvestingTab() {
             <p className="text-green-600 font-medium">
               {farmSummaries.find((f) => f.farm === selectedFarm)?.totalAcreage.toFixed(2)} Ha total
             </p>
-            <p className="text-sm text-amber-600">
-              {farmPhases.length} phase{farmPhases.length !== 1 ? "s" : ""} currently harvesting
-            </p>
           </div>
         </div>
 
@@ -356,21 +312,15 @@ export default function HarvestingTab() {
           <h3 className="text-sm font-medium text-gray-700 mb-2">
             Farmer Pledge &mdash; Week {selectedWeek}
           </h3>
-          {farmPhases.length === 0 ? (
-            <div className="bg-gray-50 rounded-lg p-8 text-center">
-              <p className="text-gray-500">No phases currently in harvest period for this farm.</p>
-            </div>
-          ) : (
-            <HarvestGanttChart
-              phases={ganttPhases}
-              weekStartDate={selectedMonday}
-              farmPhaseIds={farmPhaseIds}
-              canEdit={canEditGantt}
-              farmName={selectedFarm}
-              weekNumber={selectedWeek}
-              totalHa={farmSummaries.find((f) => f.farm === selectedFarm)?.totalAcreage.toFixed(2) ?? "-"}
-            />
-          )}
+          <HarvestGanttChart
+            phases={ganttPhases}
+            weekStartDate={selectedMonday}
+            farmPhaseIds={farmPhaseIds}
+            canEdit={canEditGantt}
+            farmName={selectedFarm}
+            weekNumber={selectedWeek}
+            totalHa={farmSummaries.find((f) => f.farm === selectedFarm)?.totalAcreage.toFixed(2) ?? "-"}
+          />
         </div>
       </div>
     </div>
