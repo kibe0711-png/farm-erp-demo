@@ -104,13 +104,26 @@ export async function GET(request: Request) {
     });
 
     // Fetch harvest schedules (pledges) within date range
-    const harvestSchedules = await prisma.harvestSchedule.findMany({
+    // Note: weekStartDate is Monday, but we need to check if the actual pledge date
+    // (weekStartDate + dayOfWeek) falls within our date range
+    // To be safe, fetch pledges from weeks that overlap with our range
+    const pledgeStartDate = new Date(startDate);
+    pledgeStartDate.setDate(startDate.getDate() - 6); // Go back 6 days to catch pledges from previous week
+
+    const allSchedules = await prisma.harvestSchedule.findMany({
       where: {
         weekStartDate: {
-          gte: startDate,
+          gte: pledgeStartDate,
           lte: endDate,
         },
       },
+    });
+
+    // Filter to only include pledges where the actual date falls within our range
+    const harvestSchedules = allSchedules.filter((schedule) => {
+      const pledgeDate = new Date(schedule.weekStartDate);
+      pledgeDate.setDate(pledgeDate.getDate() + schedule.dayOfWeek);
+      return pledgeDate >= startDate && pledgeDate <= endDate;
     });
 
     // Group harvest logs by farmPhaseId for easy lookup
