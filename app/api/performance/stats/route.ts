@@ -7,14 +7,13 @@ interface PhasePerformance {
   cropCode: string;
   areaHa: number;
   sowingDate: string;
-  laborCost: number;
-  laborDays: number;
   totalHarvestKg: number;
+  totalPledgeKg: number;
+  pledgeVariance: number;
   grade1Kg: number;
   grade2Kg: number;
   rejectKg: number;
   rejectRate: number;
-  costPerTon: number;
   yieldPerHa: number;
 }
 
@@ -22,14 +21,13 @@ interface FarmPerformance {
   farm: string;
   phaseCount: number;
   totalAreaHa: number;
-  totalLaborCost: number;
-  totalLaborDays: number;
   totalHarvestKg: number;
+  totalPledgeKg: number;
+  avgPledgeVariance: number;
   totalGrade1Kg: number;
   totalGrade2Kg: number;
   totalRejectKg: number;
   avgRejectRate: number;
-  avgCostPerTon: number;
   avgYieldPerHa: number;
   phases: PhasePerformance[];
 }
@@ -38,7 +36,7 @@ interface FarmPerformance {
  * GET /api/performance/stats
  * Returns aggregated performance metrics by farm and phase
  * Query params:
- *   - days: 7 | 30 | 90 (default: 30)
+ *   - weeks: 1 | 3 | 8 (default: 3)
  */
 export async function GET(request: Request) {
   try {
@@ -50,34 +48,45 @@ export async function GET(request: Request) {
 
     // Parse date range from query params
     const { searchParams } = new URL(request.url);
-    const daysParam = searchParams.get("days") || "30";
-    const days = parseInt(daysParam);
+    const weeksParam = searchParams.get("weeks") || "3";
+    const weeks = parseInt(weeksParam);
 
-    if (![7, 30, 90].includes(days)) {
-      return NextResponse.json({ error: "Invalid days parameter. Must be 7, 30, or 90." }, { status: 400 });
+    if (![1, 3, 8].includes(weeks)) {
+      return NextResponse.json({ error: "Invalid weeks parameter. Must be 1, 3, or 8." }, { status: 400 });
     }
 
-    // Calculate date range
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(endDate.getDate() - days);
+    // Calculate Monday-based week date range
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+
+    // End date: last complete week's Sunday (or today if we want partial week)
+    const endDate = new Date(today);
+    if (dayOfWeek !== 0) {
+      // Not Sunday yet - go back to last Sunday for complete weeks
+      endDate.setDate(today.getDate() - dayOfWeek);
+    }
+    endDate.setHours(23, 59, 59, 999);
+
+    // Track if current week is incomplete
+    const includePartialWeek = dayOfWeek !== 0;
+
+    // Extend to today if including partial week
+    if (includePartialWeek) {
+      endDate.setTime(today.getTime());
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    // Start date: N weeks before end date, starting on Monday
+    const startDate = new Date(endDate);
+    startDate.setDate(endDate.getDate() - (weeks * 7) + 1); // +1 to start on Monday
+    startDate.setHours(0, 0, 0, 0);
 
     // Fetch all phases
     const phases = await prisma.farmPhase.findMany({
       orderBy: [{ farm: "asc" }, { phaseId: "asc" }],
     });
 
-    // Fetch labor logs within date range
-    const laborLogs = await prisma.laborLog.findMany({
-      where: {
-        logDate: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-    });
-
-    // Fetch harvest logs within date range
+    // Fetch harvest logs within date range (no labor logs needed)
     const harvestLogs = await prisma.harvestLog.findMany({
       where: {
         logDate: {
@@ -87,17 +96,18 @@ export async function GET(request: Request) {
       },
     });
 
-    // Group logs by farmPhaseId for easy lookup
-    const laborLogsByPhase = new Map<number, typeof laborLogs>();
-    const harvestLogsByPhase = new Map<number, typeof harvestLogs>();
+    // Fetch harvest schedules (pledges) within date range
+    const harvestSchedules = await prisma.harvestSchedule.findMany({
+      where: {
+        weekStartDate: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+    });
 
-    for (const log of laborLogs) {
-      const phaseId = log.farmPhaseId;
-      if (!laborLogsByPhase.has(phaseId)) {
-        laborLogsByPhase.set(phaseId, []);
-      }
-      laborLogsByPhase.get(phaseId)!.push(log);
-    }
+    // Group harvest logs by farmPhaseId for easy lookup
+    const harvestLogsByPhase = new Map<number, typeof harvestLogs>();
 
     for (const log of harvestLogs) {
       const phaseId = log.farmPhaseId;
@@ -107,23 +117,23 @@ export async function GET(request: Request) {
       harvestLogsByPhase.get(phaseId)!.push(log);
     }
 
+    // Group harvest schedules (pledges) by farmPhaseId for easy lookup
+    const pledgesByPhase = new Map<number, typeof harvestSchedules>();
+
+    for (const schedule of harvestSchedules) {
+      const phaseId = schedule.farmPhaseId;
+      if (!pledgesByPhase.has(phaseId)) {
+        pledgesByPhase.set(phaseId, []);
+      }
+      pledgesByPhase.get(phaseId)!.push(schedule);
+    }
+
     // Group phases by farm and calculate metrics
     const farmMap = new Map<string, PhasePerformance[]>();
 
     for (const phase of phases) {
-      const phaseLaborLogs = laborLogsByPhase.get(phase.id) || [];
       const phaseHarvestLogs = harvestLogsByPhase.get(phase.id) || [];
-
-      // Calculate labor metrics
-      const laborCost = phaseLaborLogs.reduce((sum, log) => {
-        const cost = parseFloat(String(log.totalCost)) || 0;
-        return sum + cost;
-      }, 0);
-
-      const laborDays = phaseLaborLogs.reduce((sum, log) => {
-        const casuals = parseInt(String(log.casuals)) || 0;
-        return sum + casuals;
-      }, 0);
+      const phasePledges = pledgesByPhase.get(phase.id) || [];
 
       // Calculate harvest metrics
       const totalHarvestKg = phaseHarvestLogs.reduce((sum, log) => {
@@ -141,13 +151,20 @@ export async function GET(request: Request) {
         return sum + kg;
       }, 0);
 
+      // Calculate pledge total
+      const totalPledgeKg = phasePledges.reduce((sum, schedule) => {
+        const kg = parseFloat(String(schedule.pledgeKg)) || 0;
+        return sum + kg;
+      }, 0);
+
+      // Calculate pledge variance: (actual - pledged) / pledged * 100
+      const pledgeVariance = totalPledgeKg > 0 ? ((totalHarvestKg - totalPledgeKg) / totalPledgeKg) * 100 : 0;
+
       // Grade 2 ARE the rejects (only 2 categories: Grade 1 + Grade 2)
       const rejectKg = grade2Kg;
       const rejectRate = totalHarvestKg > 0 ? (rejectKg / totalHarvestKg) * 100 : 0;
 
       const totalHarvestTons = totalHarvestKg / 1000;
-      const costPerTon = totalHarvestTons > 0 ? laborCost / totalHarvestTons : 0;
-
       const areaHa = parseFloat(String(phase.areaHa)) || 0;
       const yieldPerHa = areaHa > 0 ? totalHarvestTons / areaHa : 0;
 
@@ -156,14 +173,13 @@ export async function GET(request: Request) {
         cropCode: phase.cropCode,
         areaHa,
         sowingDate: phase.sowingDate.toISOString().split("T")[0],
-        laborCost,
-        laborDays,
         totalHarvestKg,
+        totalPledgeKg,
+        pledgeVariance,
         grade1Kg,
         grade2Kg,
         rejectKg,
         rejectRate,
-        costPerTon,
         yieldPerHa,
       };
 
@@ -178,32 +194,32 @@ export async function GET(request: Request) {
 
     for (const [farmName, phasePerfs] of farmMap) {
       const totalAreaHa = phasePerfs.reduce((sum, p) => sum + p.areaHa, 0);
-      const totalLaborCost = phasePerfs.reduce((sum, p) => sum + p.laborCost, 0);
-      const totalLaborDays = phasePerfs.reduce((sum, p) => sum + p.laborDays, 0);
       const totalHarvestKg = phasePerfs.reduce((sum, p) => sum + p.totalHarvestKg, 0);
+      const totalPledgeKg = phasePerfs.reduce((sum, p) => sum + p.totalPledgeKg, 0);
       const totalGrade1Kg = phasePerfs.reduce((sum, p) => sum + p.grade1Kg, 0);
       const totalGrade2Kg = phasePerfs.reduce((sum, p) => sum + p.grade2Kg, 0);
       const totalRejectKg = phasePerfs.reduce((sum, p) => sum + p.rejectKg, 0);
+
+      // Weighted average pledge variance (by pledge volume)
+      const avgPledgeVariance = totalPledgeKg > 0 ? ((totalHarvestKg - totalPledgeKg) / totalPledgeKg) * 100 : 0;
 
       // Weighted average reject rate (by harvest volume)
       const avgRejectRate = totalHarvestKg > 0 ? (totalRejectKg / totalHarvestKg) * 100 : 0;
 
       const totalHarvestTons = totalHarvestKg / 1000;
-      const avgCostPerTon = totalHarvestTons > 0 ? totalLaborCost / totalHarvestTons : 0;
       const avgYieldPerHa = totalAreaHa > 0 ? totalHarvestTons / totalAreaHa : 0;
 
       farms.push({
         farm: farmName,
         phaseCount: phasePerfs.length,
         totalAreaHa,
-        totalLaborCost,
-        totalLaborDays,
         totalHarvestKg,
+        totalPledgeKg,
+        avgPledgeVariance,
         totalGrade1Kg,
         totalGrade2Kg,
         totalRejectKg,
         avgRejectRate,
-        avgCostPerTon,
         avgYieldPerHa,
         phases: phasePerfs,
       });
@@ -217,7 +233,8 @@ export async function GET(request: Request) {
       dateRange: {
         startDate: startDate.toISOString().split("T")[0],
         endDate: endDate.toISOString().split("T")[0],
-        days,
+        weeks,
+        isPartialWeek: includePartialWeek,
       },
     });
   } catch (error) {

@@ -9,14 +9,13 @@ interface PhasePerformance {
   cropCode: string;
   areaHa: number;
   sowingDate: string;
-  laborCost: number;
-  laborDays: number;
   totalHarvestKg: number;
+  totalPledgeKg: number;
+  pledgeVariance: number;
   grade1Kg: number;
   grade2Kg: number;
   rejectKg: number;
   rejectRate: number;
-  costPerTon: number;
   yieldPerHa: number;
 }
 
@@ -24,14 +23,13 @@ interface FarmPerformance {
   farm: string;
   phaseCount: number;
   totalAreaHa: number;
-  totalLaborCost: number;
-  totalLaborDays: number;
   totalHarvestKg: number;
+  totalPledgeKg: number;
+  avgPledgeVariance: number;
   totalGrade1Kg: number;
   totalGrade2Kg: number;
   totalRejectKg: number;
   avgRejectRate: number;
-  avgCostPerTon: number;
   avgYieldPerHa: number;
   phases: PhasePerformance[];
 }
@@ -41,17 +39,18 @@ interface PerformanceData {
   dateRange: {
     startDate: string;
     endDate: string;
-    days: number;
+    weeks: number;
+    isPartialWeek: boolean;
   };
 }
 
-type DateRangeType = 7 | 30 | 90;
+type DateRangeType = 1 | 3 | 8;
 
 // ── Main Component ─────────────────────────────────────────────────
 
 export default function PerformanceView() {
   const [selectedFarm, setSelectedFarm] = useState<string | null>(null);
-  const [dateRange, setDateRange] = useState<DateRangeType>(30);
+  const [dateRange, setDateRange] = useState<DateRangeType>(3);
   const [data, setData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,7 +61,7 @@ export default function PerformanceView() {
       setLoading(true);
       setError("");
       try {
-        const response = await fetch(`/api/performance/stats?days=${dateRange}`);
+        const response = await fetch(`/api/performance/stats?weeks=${dateRange}`);
         if (!response.ok) throw new Error("Failed to fetch performance data");
         const result = await response.json();
         setData(result);
@@ -107,24 +106,26 @@ export default function PerformanceView() {
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Farm Performance</h2>
             <p className="text-sm text-gray-500">
-              {data.dateRange.startDate} to {data.dateRange.endDate} ({data.dateRange.days} days)
+              {data.dateRange.startDate} to {data.dateRange.endDate}
+              {" "}({data.dateRange.weeks} week{data.dateRange.weeks > 1 ? "s" : ""})
+              {data.dateRange.isPartialWeek && " + week to date"}
             </p>
           </div>
           <div className="flex gap-2">
-            {[7, 30, 90].map((days) => (
+            {[1, 3, 8].map((weeks) => (
               <button
-                key={days}
+                key={weeks}
                 onClick={() => {
-                  setDateRange(days as DateRangeType);
+                  setDateRange(weeks as DateRangeType);
                   setSelectedFarm(null); // Reset farm selection on date change
                 }}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  dateRange === days
+                  dateRange === weeks
                     ? "bg-emerald-600 text-white"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
-                {days === 7 ? "1 Week" : days === 30 ? "30 Days" : "90 Days"}
+                {weeks === 1 ? "Last Week" : `Last ${weeks} Weeks`}
               </button>
             ))}
           </div>
@@ -175,6 +176,10 @@ function FarmCardsGrid({
 
 function FarmCard({ farm, onClick }: { farm: FarmPerformance; onClick: () => void }) {
   const rejectColor = getRejectColor(farm.avgRejectRate);
+  const varianceColor = getVarianceColor(farm.avgPledgeVariance, farm.totalPledgeKg > 0);
+  const varianceValue = farm.totalPledgeKg > 0
+    ? `${farm.avgPledgeVariance >= 0 ? "+" : ""}${farm.avgPledgeVariance.toFixed(1)}%`
+    : "-";
 
   return (
     <div
@@ -189,14 +194,17 @@ function FarmCard({ farm, onClick }: { farm: FarmPerformance; onClick: () => voi
       <div className="grid grid-cols-2 gap-4">
         <Metric label="Phases" value={farm.phaseCount.toString()} />
         <Metric label="Area (Ha)" value={farm.totalAreaHa.toFixed(2)} />
-        <Metric label="Labor Cost" value={`$${farm.totalLaborCost.toFixed(0)}`} />
+        <Metric
+          label="Pledged (T)"
+          value={farm.totalPledgeKg > 0 ? (farm.totalPledgeKg / 1000).toFixed(2) : "-"}
+        />
         <Metric
           label="Harvest (T)"
           value={(farm.totalHarvestKg / 1000).toFixed(2)}
           highlight={farm.totalHarvestKg > 0}
         />
+        <Metric label="Pledge vs Actual" value={varianceValue} color={varianceColor} />
         <Metric label="Reject Rate" value={`${farm.avgRejectRate.toFixed(1)}%`} color={rejectColor} />
-        <Metric label="Cost/Ton" value={farm.avgCostPerTon > 0 ? `$${farm.avgCostPerTon.toFixed(0)}` : "-"} />
       </div>
     </div>
   );
@@ -246,11 +254,19 @@ function PhaseDetailView({ farm, onBack }: { farm: FarmPerformance; onBack: () =
       {/* Farm summary card */}
       <div className="bg-emerald-50 rounded-lg border border-emerald-200 p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">{farm.farm} - Performance Details</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Metric label="Total Phases" value={farm.phaseCount.toString()} />
           <Metric label="Total Area (Ha)" value={farm.totalAreaHa.toFixed(2)} />
-          <Metric label="Total Labor Cost" value={`$${farm.totalLaborCost.toFixed(0)}`} />
+          <Metric
+            label="Total Pledged (T)"
+            value={farm.totalPledgeKg > 0 ? (farm.totalPledgeKg / 1000).toFixed(2) : "-"}
+          />
           <Metric label="Total Harvest (T)" value={(farm.totalHarvestKg / 1000).toFixed(2)} highlight />
+          <Metric
+            label="Pledge Variance"
+            value={farm.totalPledgeKg > 0 ? `${farm.avgPledgeVariance >= 0 ? "+" : ""}${farm.avgPledgeVariance.toFixed(1)}%` : "-"}
+            color={getVarianceColor(farm.avgPledgeVariance, farm.totalPledgeKg > 0)}
+          />
         </div>
       </div>
 
@@ -263,12 +279,10 @@ function PhaseDetailView({ farm, onBack }: { farm: FarmPerformance; onBack: () =
                 <th className="text-left py-3 px-4 font-medium text-gray-700">Phase</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-700">Crop</th>
                 <th className="text-right py-3 px-4 font-medium text-gray-700">Area (Ha)</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-700">Labor Cost</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-700">Harvest (T)</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-700">Grade 1 (%)</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-700">Grade 2 (%)</th>
+                <th className="text-right py-3 px-4 font-medium text-blue-700">Pledged (T)</th>
+                <th className="text-right py-3 px-4 font-medium text-emerald-700">Harvest (T)</th>
+                <th className="text-right py-3 px-4 font-medium text-gray-700">Variance</th>
                 <th className="text-right py-3 px-4 font-medium text-gray-700">Reject Rate</th>
-                <th className="text-right py-3 px-4 font-medium text-gray-700">Cost/Ton</th>
                 <th className="text-right py-3 px-4 font-medium text-gray-700">Yield/Ha (T)</th>
               </tr>
             </thead>
@@ -285,29 +299,17 @@ function PhaseDetailView({ farm, onBack }: { farm: FarmPerformance; onBack: () =
                 <td className="py-3 px-4 text-right font-bold text-gray-900">
                   {farm.totalAreaHa.toFixed(2)}
                 </td>
-                <td className="py-3 px-4 text-right font-bold text-gray-900">
-                  ${farm.totalLaborCost.toFixed(0)}
+                <td className="py-3 px-4 text-right font-bold text-blue-700">
+                  {farm.totalPledgeKg > 0 ? (farm.totalPledgeKg / 1000).toFixed(2) : "-"}
                 </td>
                 <td className="py-3 px-4 text-right font-bold text-emerald-800">
                   {(farm.totalHarvestKg / 1000).toFixed(2)}
                 </td>
-                <td className="py-3 px-4 text-right font-bold text-gray-900">
-                  {farm.totalHarvestKg > 0
-                    ? ((farm.totalGrade1Kg / farm.totalHarvestKg) * 100).toFixed(1)
-                    : "0.0"}
-                  %
-                </td>
-                <td className="py-3 px-4 text-right font-bold text-gray-900">
-                  {farm.totalHarvestKg > 0
-                    ? ((farm.totalGrade2Kg / farm.totalHarvestKg) * 100).toFixed(1)
-                    : "0.0"}
-                  %
+                <td className={`py-3 px-4 text-right font-bold ${getVarianceColor(farm.avgPledgeVariance, farm.totalPledgeKg > 0)}`}>
+                  {farm.totalPledgeKg > 0 ? `${farm.avgPledgeVariance >= 0 ? "+" : ""}${farm.avgPledgeVariance.toFixed(1)}%` : "-"}
                 </td>
                 <td className={`py-3 px-4 text-right font-bold ${getRejectColor(farm.avgRejectRate)}`}>
                   {farm.avgRejectRate.toFixed(1)}%
-                </td>
-                <td className="py-3 px-4 text-right font-bold text-gray-900">
-                  {farm.avgCostPerTon > 0 ? `$${farm.avgCostPerTon.toFixed(0)}` : "-"}
                 </td>
                 <td className="py-3 px-4 text-right font-bold text-gray-900">
                   {farm.avgYieldPerHa.toFixed(2)}
@@ -325,31 +327,24 @@ function PhaseDetailView({ farm, onBack }: { farm: FarmPerformance; onBack: () =
 
 function PhaseRow({ phase }: { phase: PhasePerformance }) {
   const rejectColor = getRejectColor(phase.rejectRate);
-
-  // Grade 2 ARE the rejects - so grade2Pct and rejectRate show the same thing
-  const grade1Pct =
-    phase.totalHarvestKg > 0 ? ((phase.grade1Kg / phase.totalHarvestKg) * 100).toFixed(1) : "0.0";
-  const grade2Pct =
-    phase.totalHarvestKg > 0 ? ((phase.grade2Kg / phase.totalHarvestKg) * 100).toFixed(1) : "0.0";
+  const varianceColor = getVarianceColor(phase.pledgeVariance, phase.totalPledgeKg > 0);
 
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50">
       <td className="py-3 px-4 font-medium text-gray-900">{phase.phaseId}</td>
       <td className="py-3 px-4 text-gray-700">{phase.cropCode}</td>
       <td className="py-3 px-4 text-right text-gray-700 tabular-nums">{phase.areaHa.toFixed(2)}</td>
-      <td className="py-3 px-4 text-right text-gray-700 tabular-nums">
-        ${phase.laborCost.toFixed(0)}
+      <td className="py-3 px-4 text-right text-blue-700 tabular-nums">
+        {phase.totalPledgeKg > 0 ? (phase.totalPledgeKg / 1000).toFixed(2) : "-"}
       </td>
-      <td className="py-3 px-4 text-right text-gray-700 tabular-nums font-medium">
+      <td className="py-3 px-4 text-right text-emerald-700 tabular-nums font-medium">
         {(phase.totalHarvestKg / 1000).toFixed(2)}
       </td>
-      <td className="py-3 px-4 text-right text-gray-700 tabular-nums">{grade1Pct}%</td>
-      <td className="py-3 px-4 text-right text-gray-700 tabular-nums">{grade2Pct}%</td>
+      <td className={`py-3 px-4 text-right tabular-nums font-medium ${varianceColor}`}>
+        {phase.totalPledgeKg > 0 ? `${phase.pledgeVariance >= 0 ? "+" : ""}${phase.pledgeVariance.toFixed(1)}%` : "-"}
+      </td>
       <td className={`py-3 px-4 text-right tabular-nums font-medium ${rejectColor}`}>
         {phase.rejectRate.toFixed(1)}%
-      </td>
-      <td className="py-3 px-4 text-right text-gray-700 tabular-nums">
-        {phase.costPerTon > 0 ? `$${phase.costPerTon.toFixed(0)}` : "-"}
       </td>
       <td className="py-3 px-4 text-right text-gray-700 tabular-nums">{phase.yieldPerHa.toFixed(2)}</td>
     </tr>
@@ -362,4 +357,11 @@ function getRejectColor(rejectRate: number): string {
   if (rejectRate < 8) return "text-green-600"; // Excellent
   if (rejectRate < 12) return "text-yellow-600"; // Acceptable
   return "text-red-600"; // Needs attention
+}
+
+function getVarianceColor(variance: number, hasPledge: boolean): string {
+  if (!hasPledge) return "text-gray-400"; // No pledge data
+  if (variance >= 0) return "text-green-600"; // Met or exceeded pledge
+  if (variance >= -10) return "text-yellow-600"; // Close to pledge (within 10%)
+  return "text-red-600"; // Under-delivered significantly
 }
