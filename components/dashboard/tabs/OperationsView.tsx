@@ -8,11 +8,12 @@ import LaborLogsTab from "./LaborLogsTab";
 import DailyCompliance from "./DailyCompliance";
 import HarvestingTab from "./HarvestingTab";
 import HarvestRecordsTab from "./HarvestRecordsTab";
+import HarvestPerformanceTab from "./HarvestPerformanceTab";
 import { useDashboard } from "../DashboardContext";
 import { isRoleAtLeast, UserRole } from "@/lib/auth/roles";
 import { useAnalytics } from "../../analytics/AnalyticsProvider";
 
-type OpsTab = "activities" | "nutriActivities" | "feeding" | "laborLogs" | "compliance" | "harvesting" | "harvestRecords";
+type OpsTab = "activities" | "nutriActivities" | "feeding" | "laborLogs" | "compliance" | "harvesting" | "harvestRecords" | "harvestPerformance";
 
 const ALL_TABS: { id: OpsTab; label: string; minRole?: string }[] = [
   { id: "compliance", label: "Compliance" },
@@ -22,6 +23,7 @@ const ALL_TABS: { id: OpsTab; label: string; minRole?: string }[] = [
   { id: "feeding", label: "Feeding" },
   { id: "harvestRecords", label: "Harvest Records" },
   { id: "harvesting", label: "Farmer Pledge", minRole: UserRole.FARM_SUPERVISOR },
+  { id: "harvestPerformance", label: "Harvest Performance", minRole: UserRole.FARM_MANAGER },
 ];
 
 export default function OperationsView() {
@@ -65,6 +67,8 @@ export default function OperationsView() {
                     ? "border-amber-500 text-amber-600"
                     : tab.id === "harvestRecords"
                     ? "border-green-500 text-green-600"
+                    : tab.id === "harvestPerformance"
+                    ? "border-emerald-500 text-emerald-600"
                     : "border-blue-500 text-blue-600"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
@@ -83,6 +87,7 @@ export default function OperationsView() {
       {activeTab === "feeding" && <FeedingTab />}
       {activeTab === "harvestRecords" && <HarvestRecordsTab />}
       {activeTab === "harvesting" && <HarvestingTab />}
+      {activeTab === "harvestPerformance" && <HarvestPerformanceTab />}
     </div>
   );
 }
