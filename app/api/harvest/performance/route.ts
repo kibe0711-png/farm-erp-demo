@@ -97,6 +97,28 @@ export async function GET(request: Request) {
       }),
     ]);
 
+    // Debug logging
+    console.log("[Performance API] Query params:", { weekStart, lookbackWeeks });
+    console.log("[Performance API] Date range:", {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    });
+    console.log("[Performance API] Found:", {
+      schedules: schedules.length,
+      logs: logs.length,
+      phases: phases.length,
+    });
+    if (logs.length > 0) {
+      console.log("[Performance API] Sample log:", {
+        id: logs[0].id,
+        farmPhaseId: logs[0].farmPhaseId,
+        logDate: logs[0].logDate,
+        actualKg: logs[0].actualKg,
+        grade1Kg: logs[0].grade1Kg,
+        grade2Kg: logs[0].grade2Kg,
+      });
+    }
+
     // Aggregate pledges by phase and week
     const pledgeMap = new Map<number, Map<string, number>>(); // phaseId -> weekKey -> kg
 
@@ -117,9 +139,18 @@ export async function GET(request: Request) {
     const actualMap = new Map<number, Map<string, number>>(); // phaseId -> weekKey -> kg
     const daysHarvestedMap = new Map<number, Set<string>>(); // phaseId -> Set<logDate>
 
+    const includedWeeksStrings = includedWeeks.map((w) =>
+      w.toISOString().split("T")[0]
+    );
+    console.log("[Performance API] Included weeks:", includedWeeksStrings);
+
     for (const log of logs) {
       const phaseId = log.farmPhaseId;
-      const logDate = new Date(log.logDate);
+      // Ensure UTC parsing - convert to string first if needed, then parse as UTC
+      const logDateStr = typeof log.logDate === 'string'
+        ? log.logDate
+        : log.logDate.toISOString().split('T')[0];
+      const logDate = new Date(logDateStr + 'T00:00:00.000Z');
 
       // Find which week this log belongs to (Monday anchor)
       const dayOfWeek = (logDate.getUTCDay() + 6) % 7; // Convert Sun=0 to Mon=0
@@ -127,11 +158,18 @@ export async function GET(request: Request) {
       monday.setUTCDate(monday.getUTCDate() - dayOfWeek);
       const weekKey = monday.toISOString().split("T")[0];
 
+      console.log("[Performance API] Processing log:", {
+        id: log.id,
+        logDate: log.logDate,
+        logDateParsed: logDate.toISOString(),
+        calculatedMonday: weekKey,
+        actualKg: log.actualKg,
+        includedInWeeks: includedWeeksStrings.includes(weekKey),
+      });
+
       // Only include if this week is in our included weeks
-      const includedWeeksStrings = includedWeeks.map((w) =>
-        w.toISOString().split("T")[0]
-      );
       if (!includedWeeksStrings.includes(weekKey)) {
+        console.log("[Performance API] Skipping log - week not included");
         continue;
       }
 
@@ -146,8 +184,17 @@ export async function GET(request: Request) {
       weekMap.set(weekKey, (weekMap.get(weekKey) || 0) + actualKg);
 
       const daysSet = daysHarvestedMap.get(phaseId)!;
-      daysSet.add(log.logDate.toISOString().split("T")[0]);
+      daysSet.add(logDateStr); // Use the already-parsed date string
     }
+
+    console.log("[Performance API] Aggregated actuals:", {
+      phasesWithData: actualMap.size,
+      totalKg: Array.from(actualMap.values()).reduce(
+        (sum, weekMap) =>
+          sum + Array.from(weekMap.values()).reduce((s, kg) => s + kg, 0),
+        0
+      ),
+    });
 
     // Combine pledges and actuals, format response
     const allPhaseIds = new Set([...pledgeMap.keys(), ...actualMap.keys()]);
