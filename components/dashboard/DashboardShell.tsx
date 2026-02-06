@@ -10,7 +10,6 @@ import NutriSopTab from "./tabs/NutriSopTab";
 import KeyInputsTab from "./tabs/KeyInputsTab";
 import OperationsView from "./tabs/OperationsView";
 import IPPView from "./tabs/IPPView";
-import PerformanceView from "./tabs/PerformanceView";
 import FarmSettingsTab from "./tabs/FarmSettingsTab";
 import UsersManagement from "./tabs/UsersManagement";
 import AnalyticsView from "./tabs/AnalyticsView";
@@ -40,7 +39,6 @@ export default function DashboardShell() {
             {activeSection === "keyInputs" && <KeyInputsTab />}
             {activeSection === "operations" && <OperationsView />}
             {activeSection === "ipp" && <IPPView />}
-            {activeSection === "performance" && <PerformanceView />}
             {activeSection === "settings" && <FarmSettingsTab />}
             {activeSection === "users" && <UsersManagement />}
             {activeSection === "analytics" && <AnalyticsView />}
