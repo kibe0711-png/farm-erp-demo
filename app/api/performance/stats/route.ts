@@ -121,8 +121,16 @@ export async function GET(request: Request) {
 
     // Filter to only include pledges where the actual date falls within our range
     const harvestSchedules = allSchedules.filter((schedule) => {
-      const pledgeDate = new Date(schedule.weekStartDate);
-      pledgeDate.setDate(pledgeDate.getDate() + schedule.dayOfWeek);
+      // Normalize weekStartDate to calendar date (YYYY-MM-DD) to avoid timezone shifts
+      const weekStart = new Date(schedule.weekStartDate);
+      const normalizedWeekStart = new Date(
+        weekStart.getFullYear(),
+        weekStart.getMonth(),
+        weekStart.getDate()
+      );
+
+      const pledgeDate = new Date(normalizedWeekStart);
+      pledgeDate.setDate(normalizedWeekStart.getDate() + schedule.dayOfWeek);
       return pledgeDate >= startDate && pledgeDate <= endDate;
     });
 
