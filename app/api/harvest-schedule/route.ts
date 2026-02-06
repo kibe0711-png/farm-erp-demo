@@ -16,19 +16,18 @@ export async function GET(request: Request) {
 
     const farmPhaseIds = idsParam.split(",").map(Number).filter((n) => !isNaN(n));
 
-    // Parse date and create date range for the entire day (to handle timezone variations)
-    const queryDate = new Date(weekStart);
-    const startOfDay = new Date(queryDate.getFullYear(), queryDate.getMonth(), queryDate.getDate());
-    const endOfDay = new Date(startOfDay);
-    endOfDay.setDate(endOfDay.getDate() + 1);
-    endOfDay.setMilliseconds(-1);
+    // Parse date string as UTC to match how database stores dates
+    // weekStart comes as "YYYY-MM-DD", append T00:00:00.000Z to explicitly use UTC
+    const queryDate = new Date(weekStart + "T00:00:00.000Z");
+    const nextDay = new Date(queryDate);
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
 
     const entries = await prisma.harvestSchedule.findMany({
       where: {
         farmPhaseId: { in: farmPhaseIds },
         weekStartDate: {
-          gte: startOfDay,
-          lt: endOfDay,
+          gte: queryDate,
+          lt: nextDay,
         },
       },
     });
@@ -60,20 +59,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "weekStartDate and farmPhaseIds are required" }, { status: 400 });
     }
 
-    // Parse date and create date range for the entire day (to handle timezone variations)
-    const queryDate = new Date(weekStartDate);
-    const startOfDay = new Date(queryDate.getFullYear(), queryDate.getMonth(), queryDate.getDate());
-    const endOfDay = new Date(startOfDay);
-    endOfDay.setDate(endOfDay.getDate() + 1);
-    endOfDay.setMilliseconds(-1);
+    // Parse date string as UTC to match how database stores dates
+    // weekStartDate comes as "YYYY-MM-DD", append T00:00:00.000Z to explicitly use UTC
+    const queryDate = new Date(weekStartDate + "T00:00:00.000Z");
+    const nextDay = new Date(queryDate);
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
 
     // Delete existing entries for these phases in this week
     await prisma.harvestSchedule.deleteMany({
       where: {
         farmPhaseId: { in: farmPhaseIds },
         weekStartDate: {
-          gte: startOfDay,
-          lt: endOfDay,
+          gte: queryDate,
+          lt: nextDay,
         },
       },
     });
@@ -83,7 +81,7 @@ export async function POST(request: Request) {
       await prisma.harvestSchedule.createMany({
         data: entries.map((e) => ({
           farmPhaseId: e.farmPhaseId,
-          weekStartDate: startOfDay,
+          weekStartDate: queryDate,
           dayOfWeek: e.dayOfWeek,
           pledgeKg: e.pledgeKg != null ? e.pledgeKg : null,
         })),
