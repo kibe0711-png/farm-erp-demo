@@ -16,10 +16,20 @@ export async function GET(request: Request) {
 
     const farmPhaseIds = idsParam.split(",").map(Number).filter((n) => !isNaN(n));
 
+    // Parse date and create date range for the entire day (to handle timezone variations)
+    const queryDate = new Date(weekStart);
+    const startOfDay = new Date(queryDate.getFullYear(), queryDate.getMonth(), queryDate.getDate());
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setDate(endOfDay.getDate() + 1);
+    endOfDay.setMilliseconds(-1);
+
     const entries = await prisma.harvestSchedule.findMany({
       where: {
         farmPhaseId: { in: farmPhaseIds },
-        weekStartDate: new Date(weekStart),
+        weekStartDate: {
+          gte: startOfDay,
+          lt: endOfDay,
+        },
       },
     });
 
@@ -50,13 +60,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "weekStartDate and farmPhaseIds are required" }, { status: 400 });
     }
 
-    const weekDate = new Date(weekStartDate);
+    // Parse date and create date range for the entire day (to handle timezone variations)
+    const queryDate = new Date(weekStartDate);
+    const startOfDay = new Date(queryDate.getFullYear(), queryDate.getMonth(), queryDate.getDate());
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setDate(endOfDay.getDate() + 1);
+    endOfDay.setMilliseconds(-1);
 
     // Delete existing entries for these phases in this week
     await prisma.harvestSchedule.deleteMany({
       where: {
         farmPhaseId: { in: farmPhaseIds },
-        weekStartDate: weekDate,
+        weekStartDate: {
+          gte: startOfDay,
+          lt: endOfDay,
+        },
       },
     });
 
@@ -65,7 +83,7 @@ export async function POST(request: Request) {
       await prisma.harvestSchedule.createMany({
         data: entries.map((e) => ({
           farmPhaseId: e.farmPhaseId,
-          weekStartDate: weekDate,
+          weekStartDate: startOfDay,
           dayOfWeek: e.dayOfWeek,
           pledgeKg: e.pledgeKg != null ? e.pledgeKg : null,
         })),
