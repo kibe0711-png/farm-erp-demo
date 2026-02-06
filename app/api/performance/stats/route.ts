@@ -36,7 +36,7 @@ interface FarmPerformance {
  * GET /api/performance/stats
  * Returns aggregated performance metrics by farm and phase
  * Query params:
- *   - weeks: 1 | 3 | 8 (default: 3)
+ *   - weeks: 0 (this week) | 1 | 3 | 8 (default: 3)
  */
 export async function GET(request: Request) {
   try {
@@ -51,35 +51,42 @@ export async function GET(request: Request) {
     const weeksParam = searchParams.get("weeks") || "3";
     const weeks = parseInt(weeksParam);
 
-    if (![1, 3, 8].includes(weeks)) {
-      return NextResponse.json({ error: "Invalid weeks parameter. Must be 1, 3, or 8." }, { status: 400 });
+    if (![0, 1, 3, 8].includes(weeks)) {
+      return NextResponse.json({ error: "Invalid weeks parameter. Must be 0, 1, 3, or 8." }, { status: 400 });
     }
 
     // Calculate Monday-based week date range
     const today = new Date();
     const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
 
-    // End date: last complete week's Sunday (or today if we want partial week)
-    const endDate = new Date(today);
-    if (dayOfWeek !== 0) {
-      // Not Sunday yet - go back to last Sunday for complete weeks
-      endDate.setDate(today.getDate() - dayOfWeek);
-    }
-    endDate.setHours(23, 59, 59, 999);
+    // Find Monday of current week (0=Sun, so Mon=1)
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const currentMonday = new Date(today);
+    currentMonday.setDate(today.getDate() - daysFromMonday);
+    currentMonday.setHours(0, 0, 0, 0);
 
-    // Track if current week is incomplete
-    const includePartialWeek = dayOfWeek !== 0;
+    let startDate: Date;
+    let endDate: Date;
 
-    // Extend to today if including partial week
-    if (includePartialWeek) {
-      endDate.setTime(today.getTime());
+    if (weeks === 0) {
+      // This Week: Monday of current week to today
+      startDate = new Date(currentMonday);
+      endDate = new Date(today);
       endDate.setHours(23, 59, 59, 999);
-    }
+    } else {
+      // Last N complete weeks: N weeks back to last Sunday
+      // Find last Sunday (end of last complete week)
+      const lastSunday = new Date(currentMonday);
+      lastSunday.setDate(currentMonday.getDate() - 1); // Go back 1 day from Monday = Sunday
+      lastSunday.setHours(23, 59, 59, 999);
 
-    // Start date: N weeks before end date, starting on Monday
-    const startDate = new Date(endDate);
-    startDate.setDate(endDate.getDate() - (weeks * 7) + 1); // +1 to start on Monday
-    startDate.setHours(0, 0, 0, 0);
+      // Start date: N weeks back from last Sunday's week
+      startDate = new Date(lastSunday);
+      startDate.setDate(lastSunday.getDate() - (weeks * 7) + 1); // +1 to get Monday
+      startDate.setHours(0, 0, 0, 0);
+
+      endDate = lastSunday;
+    }
 
     // Fetch all phases
     const phases = await prisma.farmPhase.findMany({
@@ -234,7 +241,7 @@ export async function GET(request: Request) {
         startDate: startDate.toISOString().split("T")[0],
         endDate: endDate.toISOString().split("T")[0],
         weeks,
-        isPartialWeek: includePartialWeek,
+        isThisWeek: weeks === 0,
       },
     });
   } catch (error) {

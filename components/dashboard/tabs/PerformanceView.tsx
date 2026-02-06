@@ -40,11 +40,11 @@ interface PerformanceData {
     startDate: string;
     endDate: string;
     weeks: number;
-    isPartialWeek: boolean;
+    isThisWeek: boolean;
   };
 }
 
-type DateRangeType = 1 | 3 | 8;
+type DateRangeType = 0 | 1 | 3 | 8;
 
 // ── Main Component ─────────────────────────────────────────────────
 
@@ -107,12 +107,13 @@ export default function PerformanceView() {
             <h2 className="text-xl font-semibold text-gray-900">Farm Performance</h2>
             <p className="text-sm text-gray-500">
               {data.dateRange.startDate} to {data.dateRange.endDate}
-              {" "}({data.dateRange.weeks} week{data.dateRange.weeks > 1 ? "s" : ""})
-              {data.dateRange.isPartialWeek && " + week to date"}
+              {data.dateRange.isThisWeek
+                ? " (week to date)"
+                : ` (${data.dateRange.weeks} complete week${data.dateRange.weeks > 1 ? "s" : ""})`}
             </p>
           </div>
           <div className="flex gap-2">
-            {[1, 3, 8].map((weeks) => (
+            {[0, 1, 3, 8].map((weeks) => (
               <button
                 key={weeks}
                 onClick={() => {
@@ -125,7 +126,7 @@ export default function PerformanceView() {
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
-                {weeks === 1 ? "Last Week" : `Last ${weeks} Weeks`}
+                {weeks === 0 ? "This Week" : weeks === 1 ? "Last Week" : `Last ${weeks} Weeks`}
               </button>
             ))}
           </div>
