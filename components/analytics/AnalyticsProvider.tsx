@@ -14,20 +14,25 @@ interface AnalyticsProviderProps {
   currentPage: string;
 }
 
+// Only track operations tab - ignore other navigation
+const TRACKED_PAGES = ["operations"];
+
 /**
  * Analytics Provider
  * Wraps the dashboard and automatically tracks:
- * - Page views when currentPage changes
- * - Time spent on each page
- * - Provides trackAction() for manual event tracking
+ * - Page views ONLY for operations tab (not other navigation)
+ * - Time spent on operations tab
+ * - Provides trackAction() for manual event tracking (data entries, etc.)
  */
 export function AnalyticsProvider({ children, currentPage }: AnalyticsProviderProps) {
   const pageStartTime = useRef<number>(Date.now());
   const previousPage = useRef<string>(currentPage);
 
   useEffect(() => {
-    // Track page view when currentPage changes
-    trackPageView(currentPage);
+    // Only track specific pages (operations tab)
+    if (TRACKED_PAGES.includes(currentPage)) {
+      trackPageView(currentPage);
+    }
 
     // Reset start time for new page
     pageStartTime.current = Date.now();
@@ -35,11 +40,13 @@ export function AnalyticsProvider({ children, currentPage }: AnalyticsProviderPr
   }, [currentPage]);
 
   useEffect(() => {
-    // Track time spent when component unmounts or page changes
+    // Track time spent only for tracked pages
     return () => {
-      const timeSpent = Math.floor((Date.now() - pageStartTime.current) / 1000);
-      if (timeSpent > 0) {
-        trackTimeSpent(previousPage.current, timeSpent);
+      if (TRACKED_PAGES.includes(previousPage.current)) {
+        const timeSpent = Math.floor((Date.now() - pageStartTime.current) / 1000);
+        if (timeSpent > 0) {
+          trackTimeSpent(previousPage.current, timeSpent);
+        }
       }
     };
   }, [currentPage]);

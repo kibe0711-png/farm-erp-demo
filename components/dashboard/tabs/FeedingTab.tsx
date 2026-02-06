@@ -8,6 +8,7 @@ import {
   type Phase,
 } from "../DashboardContext";
 import { isRoleAtLeast, UserRole } from "@/lib/auth/roles";
+import { useAnalytics } from "../../analytics/AnalyticsProvider";
 
 export default function FeedingTab() {
   const {
@@ -20,6 +21,7 @@ export default function FeedingTab() {
     handleDeleteFeedingRecord,
     user,
   } = useDashboard();
+  const { trackAction } = useAnalytics();
 
   // Compliance summary is only visible to FARM_MANAGER and above
   const canViewCompliance = user ? isRoleAtLeast(user.role, UserRole.FARM_MANAGER) : false;
@@ -40,6 +42,15 @@ export default function FeedingTab() {
     if (!selectedPhase) return;
     try {
       await handleFeedingSubmit(feedingForm, selectedPhase);
+
+      // Track data entry
+      trackAction("data_entry", {
+        type: "feeding_record",
+        farm: selectedFarm,
+        product: feedingForm.product,
+        qty: parseFloat(feedingForm.actualQty) || 0,
+      });
+
       setFeedingForm({ product: "", actualQty: "", applicationDate: new Date().toISOString().split("T")[0], notes: "" });
       alert("Feeding record saved successfully");
     } catch (error) {
@@ -48,7 +59,12 @@ export default function FeedingTab() {
   };
 
   const onDelete = async (id: number) => {
-    try { await handleDeleteFeedingRecord(id); } catch { alert("Failed to delete record"); }
+    try {
+      await handleDeleteFeedingRecord(id);
+      trackAction("data_delete", { type: "feeding_record", id });
+    } catch {
+      alert("Failed to delete record");
+    }
   };
 
   // ── Farm cards view ──────────────────────────────────────────────

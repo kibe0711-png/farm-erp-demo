@@ -59,6 +59,7 @@ export async function GET(request: Request) {
     // === Feature Usage Aggregation ===
     const featureUsageMap = new Map<string, { viewCount: number; uniqueUsers: Set<number> }>();
 
+    // Include page_view events
     analyticsEvents
       .filter((e) => e.eventType === "page_view")
       .forEach((event) => {
@@ -70,6 +71,25 @@ export async function GET(request: Request) {
         stats.viewCount++;
         if (event.userId) {
           stats.uniqueUsers.add(event.userId);
+        }
+      });
+
+    // Include operations sub-tab views (action events)
+    analyticsEvents
+      .filter((e) => e.eventType === "action" && e.eventName === "operations_subtab_view")
+      .forEach((event) => {
+        const metadata = event.metadata as { subtabLabel?: string } | null;
+        const subtabLabel = metadata?.subtabLabel;
+        if (subtabLabel) {
+          const feature = `operations_${subtabLabel.toLowerCase().replace(/\s+/g, "_")}`;
+          if (!featureUsageMap.has(feature)) {
+            featureUsageMap.set(feature, { viewCount: 0, uniqueUsers: new Set() });
+          }
+          const stats = featureUsageMap.get(feature)!;
+          stats.viewCount++;
+          if (event.userId) {
+            stats.uniqueUsers.add(event.userId);
+          }
         }
       });
 
@@ -181,6 +201,32 @@ export async function GET(request: Request) {
       .filter((stat) => stat.avgResponseTime > 1000)
       .sort((a, b) => b.avgResponseTime - a.avgResponseTime);
 
+    // === Data Entry Metrics ===
+    const dataEntryMap = new Map<string, { count: number; uniqueUsers: Set<number> }>();
+
+    analyticsEvents
+      .filter((e) => e.eventType === "action" && e.eventName === "data_entry")
+      .forEach((event) => {
+        const metadata = event.metadata as { type?: string } | null;
+        const entryType = metadata?.type || "unknown";
+        if (!dataEntryMap.has(entryType)) {
+          dataEntryMap.set(entryType, { count: 0, uniqueUsers: new Set() });
+        }
+        const stats = dataEntryMap.get(entryType)!;
+        stats.count++;
+        if (event.userId) {
+          stats.uniqueUsers.add(event.userId);
+        }
+      });
+
+    const dataEntryStats = Array.from(dataEntryMap.entries())
+      .map(([type, stats]) => ({
+        entryType: type,
+        count: stats.count,
+        uniqueUsers: stats.uniqueUsers.size,
+      }))
+      .sort((a, b) => b.count - a.count);
+
     // === Recent Events (last 100, with user info) ===
     const recentEvents = analyticsEvents
       .slice(0, 100)
@@ -200,6 +246,7 @@ export async function GET(request: Request) {
       userActivity,
       apiPerformance,
       slowQueries,
+      dataEntryStats,
       recentEvents,
       dateRange: {
         startDate: startDate.toISOString(),

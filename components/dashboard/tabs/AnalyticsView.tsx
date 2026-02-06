@@ -39,11 +39,18 @@ interface RecentEventItem {
   createdAt: string;
 }
 
+interface DataEntryItem {
+  entryType: string;
+  count: number;
+  uniqueUsers: number;
+}
+
 interface AnalyticsData {
   featureUsage: FeatureUsageItem[];
   userActivity: UserActivityItem[];
   apiPerformance: ApiPerformanceItem[];
   slowQueries: ApiPerformanceItem[];
+  dataEntryStats: DataEntryItem[];
   recentEvents: RecentEventItem[];
   dateRange: {
     startDate: string;
@@ -51,7 +58,7 @@ interface AnalyticsData {
   };
 }
 
-type TabType = "feature" | "user" | "api" | "events";
+type TabType = "feature" | "dataEntry" | "user" | "api" | "events";
 type DateRangeType = "7d" | "30d" | "90d";
 
 export default function AnalyticsView() {
@@ -150,7 +157,8 @@ export default function AnalyticsView() {
       <div className="border-b border-gray-200">
         <div className="flex gap-6">
           {[
-            { id: "feature" as TabType, label: "Feature Usage" },
+            { id: "feature" as TabType, label: "Operations Usage" },
+            { id: "dataEntry" as TabType, label: "Data Entries" },
             { id: "user" as TabType, label: "User Activity" },
             { id: "api" as TabType, label: "API Performance" },
             { id: "events" as TabType, label: "Recent Events" },
@@ -173,6 +181,7 @@ export default function AnalyticsView() {
       {/* Tab Content */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {activeTab === "feature" && <FeatureUsageTab data={data.featureUsage} />}
+        {activeTab === "dataEntry" && <DataEntryTab data={data.dataEntryStats} />}
         {activeTab === "user" && <UserActivityTab data={data.userActivity} />}
         {activeTab === "api" && <ApiPerformanceTab data={data.apiPerformance} slowQueries={data.slowQueries} />}
         {activeTab === "events" && <RecentEventsTab data={data.recentEvents} />}
@@ -428,6 +437,54 @@ function RecentEventsTab({ data }: { data: RecentEventItem[] }) {
               </td>
               <td className="py-3 px-4 text-gray-700 font-mono text-xs">{event.eventName}</td>
               <td className="py-3 px-4 text-gray-700">{event.userName || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// === Data Entry Tab ===
+function DataEntryTab({ data }: { data: DataEntryItem[] }) {
+  if (data.length === 0) {
+    return <EmptyState message="No data entries logged yet" />;
+  }
+
+  const maxEntries = Math.max(...data.map((item) => item.count));
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-200 bg-gray-50">
+            <th className="text-left py-3 px-4 font-medium text-gray-700">Entry Type</th>
+            <th className="text-right py-3 px-4 font-medium text-gray-700">Total Entries</th>
+            <th className="text-right py-3 px-4 font-medium text-gray-700">Unique Users</th>
+            <th className="text-left py-3 px-4 font-medium text-gray-700">Volume</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((item, idx) => (
+            <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+              <td className="py-3 px-4 font-medium text-gray-900 capitalize">
+                {item.entryType.replace(/_/g, " ")}
+              </td>
+              <td className="py-3 px-4 text-right text-gray-700 font-bold text-lg">{item.count}</td>
+              <td className="py-3 px-4 text-right text-gray-700">{item.uniqueUsers}</td>
+              <td className="py-3 px-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-green-600 h-2 rounded-full"
+                      style={{ width: `${(item.count / maxEntries) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500 w-12 text-right">
+                    {Math.round((item.count / maxEntries) * 100)}%
+                  </span>
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>

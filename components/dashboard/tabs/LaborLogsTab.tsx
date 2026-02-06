@@ -7,6 +7,7 @@ import {
   calculateWeeksSinceSowing,
   type Phase,
 } from "../DashboardContext";
+import { useAnalytics } from "../../analytics/AnalyticsProvider";
 
 export default function LaborLogsTab() {
   const {
@@ -20,6 +21,7 @@ export default function LaborLogsTab() {
     handleLaborLogSubmit,
     handleDeleteLaborLog,
   } = useDashboard();
+  const { trackAction } = useAnalytics();
 
   const [selectedFarm, setSelectedFarm] = useState<string | null>(null);
   const [selectedPhase, setSelectedPhase] = useState<Phase | null>(null);
@@ -43,6 +45,15 @@ export default function LaborLogsTab() {
     if (!selectedPhase) return;
     try {
       await handleLaborLogSubmit(logForm, selectedPhase);
+
+      // Track data entry
+      trackAction("data_entry", {
+        type: "labor_log",
+        farm: selectedFarm,
+        task: logForm.task,
+        casuals: parseInt(logForm.casuals) || 0,
+      });
+
       setLogForm({ task: "", casuals: "", logDate: new Date().toISOString().split("T")[0], notes: "" });
       alert("Labor log saved successfully");
     } catch (error) {
@@ -51,7 +62,12 @@ export default function LaborLogsTab() {
   };
 
   const onDelete = async (id: number) => {
-    try { await handleDeleteLaborLog(id); } catch { alert("Failed to delete record"); }
+    try {
+      await handleDeleteLaborLog(id);
+      trackAction("data_delete", { type: "labor_log", id });
+    } catch {
+      alert("Failed to delete record");
+    }
   };
 
   // Week date range

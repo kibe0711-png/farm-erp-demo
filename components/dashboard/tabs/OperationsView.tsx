@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import LaborActivitiesTab from "./LaborActivitiesTab";
 import NutriActivitiesTab from "./NutriActivitiesTab";
 import FeedingTab from "./FeedingTab";
@@ -10,6 +10,7 @@ import HarvestingTab from "./HarvestingTab";
 import HarvestRecordsTab from "./HarvestRecordsTab";
 import { useDashboard } from "../DashboardContext";
 import { isRoleAtLeast, UserRole } from "@/lib/auth/roles";
+import { useAnalytics } from "../../analytics/AnalyticsProvider";
 
 type OpsTab = "activities" | "nutriActivities" | "feeding" | "laborLogs" | "compliance" | "harvesting" | "harvestRecords";
 
@@ -25,6 +26,7 @@ const ALL_TABS: { id: OpsTab; label: string; minRole?: string }[] = [
 
 export default function OperationsView() {
   const { user } = useDashboard();
+  const { trackAction } = useAnalytics();
   const [activeTab, setActiveTab] = useState<OpsTab>("compliance");
 
   const tabs = useMemo(() => {
@@ -33,6 +35,14 @@ export default function OperationsView() {
       return user?.role ? isRoleAtLeast(user.role, tab.minRole as "FARM_MANAGER") : false;
     });
   }, [user]);
+
+  // Track sub-tab changes in analytics
+  useEffect(() => {
+    trackAction("operations_subtab_view", {
+      subtab: activeTab,
+      subtabLabel: ALL_TABS.find((t) => t.id === activeTab)?.label,
+    });
+  }, [activeTab, trackAction]);
 
   return (
     <div>
