@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import WeekSelector from "../WeekSelector";
 import HarvestGanttChart, { type HarvestPhaseRow } from "./HarvestGanttChart";
-import { useDashboard, calculateWeeksSinceSowing } from "../DashboardContext";
+import { useDashboard } from "../DashboardContext";
 import { hasPermission, Permission } from "@/lib/auth/roles";
 import jsPDF from "jspdf";
 
@@ -21,7 +21,6 @@ export default function HarvestingTab() {
     selectedMonday,
     selectedWeek,
     farmSummaries,
-    keyInputs,
     user,
   } = useDashboard();
 
@@ -29,19 +28,52 @@ export default function HarvestingTab() {
 
   const [selectedFarm, setSelectedFarm] = useState<string | null>(null);
 
-  // Filter to only show phases that are currently in harvesting period
-  const harvestingPhases = useMemo(() => {
-    return phases.filter((phase) => {
-      const keyInput = keyInputs.find((k) => k.cropCode === phase.cropCode);
-      if (!keyInput) return false;
+  // This will be populated after fetching schedules - phases with pledges > 0 kg
+  const [harvestingPhases, setHarvestingPhases] = useState<typeof phases>([]);
 
-      const weeksSinceSowing = calculateWeeksSinceSowing(phase.sowingDate, selectedMonday);
-      const harvestStartWeek = Math.ceil((keyInput.nurseryDays + keyInput.outgrowingDays) / 7);
-      const harvestEndWeek = harvestStartWeek + keyInput.harvestWeeks;
+  // Fetch schedules and filter to only phases with harvest pledges > 0 kg for this week
+  useEffect(() => {
+    const fetchHarvestingPhases = async () => {
+      if (phases.length === 0) {
+        setHarvestingPhases([]);
+        return;
+      }
 
-      return weeksSinceSowing >= harvestStartWeek && weeksSinceSowing < harvestEndWeek;
-    });
-  }, [phases, keyInputs, selectedMonday]);
+      const weekStr = selectedMonday.toISOString().split("T")[0];
+      const allPhaseIds = phases.map((p) => p.id);
+
+      try {
+        const res = await fetch(
+          `/api/harvest-schedule?farmPhaseIds=${allPhaseIds.join(",")}&weekStart=${weekStr}`
+        );
+
+        if (!res.ok) {
+          setHarvestingPhases([]);
+          return;
+        }
+
+        const entries: ApiEntry[] = await res.json();
+
+        // Calculate total kg per phase for this week
+        const phaseKgMap = new Map<number, number>();
+        entries.forEach((e) => {
+          const kg = e.pledgeKg != null ? Number(e.pledgeKg) : 0;
+          if (!isNaN(kg)) {
+            phaseKgMap.set(e.farmPhaseId, (phaseKgMap.get(e.farmPhaseId) || 0) + kg);
+          }
+        });
+
+        // Filter phases with total kg > 0
+        const phasesWithPledges = phases.filter((p) => (phaseKgMap.get(p.id) || 0) > 0);
+        setHarvestingPhases(phasesWithPledges);
+      } catch (error) {
+        console.error("Failed to fetch harvest schedules:", error);
+        setHarvestingPhases([]);
+      }
+    };
+
+    fetchHarvestingPhases();
+  }, [phases, selectedMonday]);
 
   const farmPhases = selectedFarm
     ? harvestingPhases.filter((p) => p.farm === selectedFarm)
@@ -125,13 +157,21 @@ export default function HarvestingTab() {
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(107, 114, 128); // gray-500
-    doc.text(`Week ${selectedWeek} | Harvesting Phases Only`, margin, y);
+    doc.text(`Week ${selectedWeek} | Phases with Pledges Only`, margin, y);
     y += 10;
 
     // Iterate through farms
     for (const [farmName, cropGroups] of Array.from(farmGroups.entries()).sort()) {
       const farmPhases = harvestingPhases.filter((p) => p.farm === farmName);
-      const totalHa = farmPhases.reduce((sum, p) => sum + Number(p.areaHa || 0), 0);
+
+      // Calculate total kg for this farm
+      let farmTotalKg = 0;
+      farmPhases.forEach((phase) => {
+        const days = scheduleMap.get(phase.id);
+        if (days) {
+          days.forEach((kg) => { farmTotalKg += kg ?? 0; });
+        }
+      });
 
       // Farm header
       if (!isFirstPage) {
@@ -142,7 +182,7 @@ export default function HarvestingTab() {
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(31, 41, 55); // gray-800
-      doc.text(`${farmName} — ${totalHa.toFixed(2)} Ha`, margin, y);
+      doc.text(`${farmName} — ${farmTotalKg.toLocaleString()} kg`, margin, y);
       y += 6;
 
       // Iterate through crop codes within this farm
