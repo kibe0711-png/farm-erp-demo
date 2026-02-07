@@ -144,6 +144,18 @@ export async function GET(request: Request) {
     );
     console.log("[Performance API] Included weeks:", includedWeeksStrings);
 
+    // Build week ranges from includedWeeks for matching logs
+    // Each week runs from its Monday (inclusive) to next Monday (exclusive)
+    const weekRanges = includedWeeks.map((monday) => {
+      const sundayEnd = new Date(monday);
+      sundayEnd.setUTCDate(sundayEnd.getUTCDate() + 7); // Next Monday = exclusive end
+      return {
+        weekKey: monday.toISOString().split("T")[0],
+        start: monday.getTime(),
+        end: sundayEnd.getTime(),
+      };
+    });
+
     for (const log of logs) {
       const phaseId = log.farmPhaseId;
       // Ensure UTC parsing - convert to string first if needed, then parse as UTC
@@ -151,28 +163,28 @@ export async function GET(request: Request) {
         ? log.logDate
         : log.logDate.toISOString().split('T')[0];
       const logDate = new Date(logDateStr + 'T00:00:00.000Z');
+      const logTime = logDate.getTime();
 
-      // Find which week this log belongs to (Monday anchor)
-      const dayOfWeek = (logDate.getUTCDay() + 6) % 7; // Convert Sun=0 to Mon=0
-      const monday = new Date(logDate);
-      monday.setUTCDate(monday.getUTCDate() - dayOfWeek);
-      const weekKey = monday.toISOString().split("T")[0];
+      // Find which week this log falls into by checking ranges
+      const matchingWeek = weekRanges.find(
+        (range) => logTime >= range.start && logTime < range.end
+      );
 
       console.log("[Performance API] Processing log:", {
         id: log.id,
         logDate: log.logDate,
         logDateParsed: logDate.toISOString(),
-        calculatedMonday: weekKey,
+        matchedWeek: matchingWeek?.weekKey || "none",
         actualKg: log.actualKg,
-        includedInWeeks: includedWeeksStrings.includes(weekKey),
       });
 
-      // Only include if this week is in our included weeks
-      if (!includedWeeksStrings.includes(weekKey)) {
-        console.log("[Performance API] Skipping log - week not included");
+      // Only include if this log falls within one of our included weeks
+      if (!matchingWeek) {
+        console.log("[Performance API] Skipping log - no matching week");
         continue;
       }
 
+      const weekKey = matchingWeek.weekKey;
       const actualKg = parseFloat(String(log.actualKg)) || 0;
 
       if (!actualMap.has(phaseId)) {
