@@ -122,6 +122,14 @@ export default function NutriActivitiesTab() {
       });
     });
 
+    // Sort by farmPhaseId to keep activities grouped by phase
+    const phaseOrder = new Map(nutriFarmPhases.map((p, idx) => [p.id, idx]));
+    filtered.sort((a, b) => {
+      const orderA = phaseOrder.get(a.farmPhaseId) ?? 999;
+      const orderB = phaseOrder.get(b.farmPhaseId) ?? 999;
+      return orderA - orderB;
+    });
+
     return filtered;
   })();
 
