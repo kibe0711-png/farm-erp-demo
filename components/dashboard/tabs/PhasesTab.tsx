@@ -73,6 +73,23 @@ export default function PhasesTab() {
   });
   const [saving, setSaving] = useState(false);
 
+  // Archive filter
+  const [showArchived, setShowArchived] = useState(false);
+
+  const archivedCount = phasesWithWeeks.filter((p) => p.archived).length;
+  const filteredPhases = useMemo(
+    () => phasesWithWeeks.filter((p) => showArchived ? p.archived : !p.archived),
+    [phasesWithWeeks, showArchived]
+  );
+
+  const toggleArchive = async (id: number, archived: boolean) => {
+    try {
+      await handleUpdatePhase(id, { archived });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update phase");
+    }
+  };
+
   // Add form state
   const [showAddForm, setShowAddForm] = useState(false);
   const [addValues, setAddValues] = useState({
@@ -138,9 +155,25 @@ export default function PhasesTab() {
       />
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-medium text-gray-900">Uploaded Phases</h2>
+          <div className="flex items-center gap-4">
+            <h2 className="text-lg font-medium text-gray-900">
+              {showArchived ? "Archived Phases" : "Uploaded Phases"}
+            </h2>
+            {canManage && archivedCount > 0 && (
+              <button
+                onClick={() => setShowArchived(!showArchived)}
+                className={`text-xs px-2.5 py-1 rounded-full border ${
+                  showArchived
+                    ? "bg-gray-700 text-white border-gray-700"
+                    : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
+                }`}
+              >
+                {showArchived ? `Active (${phasesWithWeeks.length - archivedCount})` : `Archived (${archivedCount})`}
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-3">
-            {canManage && (
+            {canManage && !showArchived && (
               <button
                 onClick={() => setShowAddForm(true)}
                 disabled={showAddForm}
@@ -149,7 +182,7 @@ export default function PhasesTab() {
                 + Add Phase
               </button>
             )}
-            {phases.length > 0 && (
+            {phases.length > 0 && !showArchived && (
               <button
                 onClick={handleClearPhases}
                 className="text-sm text-red-600 hover:text-red-700"
@@ -194,8 +227,10 @@ export default function PhasesTab() {
 
         {loading ? (
           <div className="text-center py-8 text-gray-500">Loading...</div>
-        ) : phasesWithWeeks.length === 0 && !showAddForm ? (
-          <div className="text-center py-8 text-gray-500">No data available</div>
+        ) : filteredPhases.length === 0 && !showAddForm ? (
+          <div className="text-center py-8 text-gray-500">
+            {showArchived ? "No archived phases" : "No data available"}
+          </div>
         ) : (
           <div className="overflow-x-auto border border-gray-200 rounded-lg">
             <table className="min-w-full divide-y divide-gray-200">
@@ -280,10 +315,11 @@ export default function PhasesTab() {
                     </td>
                   </tr>
                 )}
-                {phasesWithWeeks.map((phase) => {
+                {filteredPhases.map((phase) => {
                   const isEditing = editingId === phase.id;
+                  const isArchived = !!phase.archived;
                   return (
-                    <tr key={phase.id} className="hover:bg-gray-50">
+                    <tr key={phase.id} className={`hover:bg-gray-50 ${isArchived ? "opacity-60" : ""}`}>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
                         {isEditing ? (
                           <input
@@ -372,11 +408,19 @@ export default function PhasesTab() {
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
+                              {!isArchived && (
+                                <button
+                                  onClick={() => startEdit(phase)}
+                                  className="text-sm text-blue-600 hover:text-blue-700"
+                                >
+                                  Edit
+                                </button>
+                              )}
                               <button
-                                onClick={() => startEdit(phase)}
-                                className="text-sm text-blue-600 hover:text-blue-700"
+                                onClick={() => toggleArchive(phase.id, !isArchived)}
+                                className={`text-sm ${isArchived ? "text-green-600 hover:text-green-700" : "text-orange-600 hover:text-orange-700"}`}
                               >
-                                Edit
+                                {isArchived ? "Unarchive" : "Archive"}
                               </button>
                               <button
                                 onClick={() => handleDeletePhase(phase.id)}

@@ -92,9 +92,54 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE() {
+export async function PATCH(request: Request) {
   try {
-    await prisma.nutriSop.deleteMany();
+    const data = await request.json();
+    const { id, ...updates } = data;
+
+    if (!id) {
+      return NextResponse.json({ error: "ID is required" }, { status: 400 });
+    }
+
+    // Build update object with only provided fields
+    const updateData: Record<string, unknown> = {};
+    if (updates.cropCode !== undefined) updateData.cropCode = String(updates.cropCode).trim();
+    if (updates.week !== undefined) updateData.week = parseInt(String(updates.week), 10) || 0;
+    if (updates.products !== undefined) updateData.products = String(updates.products).trim();
+    if (updates.activeIngredient !== undefined) updateData.activeIngredient = String(updates.activeIngredient).trim();
+    if (updates.rateLitre !== undefined) updateData.rateLitre = parseFloat(String(updates.rateLitre)) || 0;
+    if (updates.rateHa !== undefined) updateData.rateHa = parseFloat(String(updates.rateHa)) || 0;
+    if (updates.unitPriceRwf !== undefined) updateData.unitPriceRwf = parseFloat(String(updates.unitPriceRwf)) || 0;
+    if (updates.cost !== undefined) updateData.cost = parseFloat(String(updates.cost)) || 0;
+
+    const updated = await prisma.nutriSop.update({
+      where: { id: parseInt(String(id), 10) },
+      data: updateData,
+    });
+
+    return NextResponse.json({ success: true, record: updated });
+  } catch (error) {
+    console.error("Failed to update nutri SOP:", error);
+    const message = error instanceof Error ? error.message : "Failed to update data";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (id) {
+      // Delete single record
+      await prisma.nutriSop.delete({
+        where: { id: parseInt(id, 10) },
+      });
+    } else {
+      // Delete all records
+      await prisma.nutriSop.deleteMany();
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to delete nutri SOP:", error);

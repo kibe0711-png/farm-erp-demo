@@ -22,9 +22,13 @@ function parseDate(dateStr: string): Date {
   return new Date(dateStr);
 }
 
-export const GET = withAnalytics(async () => {
+export const GET = withAnalytics(async (request: Request) => {
   try {
+    const { searchParams } = new URL(request.url);
+    const includeArchived = searchParams.get("includeArchived") === "true";
+
     const phases = await prisma.farmPhase.findMany({
+      where: includeArchived ? {} : { archived: false },
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(phases);
@@ -129,7 +133,7 @@ export const PATCH = withAnalytics(async (request: Request) => {
     }
 
     const body = await request.json();
-    const { id, cropCode, phaseId, sowingDate, farm, areaHa } = body;
+    const { id, cropCode, phaseId, sowingDate, farm, areaHa, archived } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Phase id is required" }, { status: 400 });
@@ -149,6 +153,7 @@ export const PATCH = withAnalytics(async (request: Request) => {
       updateData.farmId = farmRecord.id;
     }
     if (areaHa !== undefined) updateData.areaHa = parseFloat(areaHa) || 0;
+    if (archived !== undefined) updateData.archived = Boolean(archived);
 
     const phase = await prisma.farmPhase.update({
       where: { id: Number(id) },

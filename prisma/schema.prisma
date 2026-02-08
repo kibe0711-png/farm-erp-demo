@@ -27,6 +27,7 @@ model FarmPhase {
   farmId     Int?     @map("farm_id")
   farmRef    Farm?    @relation(fields: [farmId], references: [id])
   areaHa     Decimal  @default(0) @map("area_ha") @db.Decimal(10, 4)
+  archived   Boolean  @default(false)
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@map("farm_phases")

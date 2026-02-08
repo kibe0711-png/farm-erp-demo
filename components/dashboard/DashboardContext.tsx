@@ -10,6 +10,7 @@ export interface Phase {
   sowingDate: string;
   farm: string;
   areaHa: string | number;
+  archived?: boolean;
 }
 
 export interface LaborSopItem {
@@ -317,6 +318,10 @@ interface DashboardContextValue {
   handleUpdatePhase: (id: number, updates: Partial<Phase>) => Promise<void>;
   handleDeletePhase: (id: number) => Promise<void>;
   handleAddPhase: (phase: Omit<Phase, "id">) => Promise<void>;
+
+  // Nutri SOP CRUD
+  handleUpdateNutriSop: (id: number, updates: Partial<NutriSopItem>) => Promise<void>;
+  handleDeleteNutriSop: (id: number) => Promise<void>;
 
   // Logout
   handleLogout: () => Promise<void>;
@@ -710,6 +715,27 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   const userName = user?.name ?? "";
 
+  // ── Nutri SOP CRUD handlers (stable refs) ─────────────────────
+  const handleUpdateNutriSop = useCallback(async (id: number, updates: Partial<NutriSopItem>) => {
+    const res = await fetch("/api/nutri-sop", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...updates }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || "Failed to update nutri SOP");
+    }
+    fetchNutriSop();
+  }, [fetchNutriSop]);
+
+  const handleDeleteNutriSop = useCallback(async (id: number) => {
+    if (!confirm("Delete this SOP entry?")) return;
+    const res = await fetch(`/api/nutri-sop?id=${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete nutri SOP");
+    fetchNutriSop();
+  }, [fetchNutriSop]);
+
   // ── Logout (stable ref) ───────────────────────────────────────
   const handleLogout = useCallback(async () => {
     // Track logout event (will capture session duration on server side)
@@ -832,6 +858,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     handleUpdatePhase,
     handleDeletePhase,
     handleAddPhase,
+    handleUpdateNutriSop,
+    handleDeleteNutriSop,
     user,
     userName,
     handleLogout,
@@ -847,6 +875,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     handleLaborLogSubmit, handleDeleteLaborLog,
     handleHarvestLogSubmit, handleDeleteHarvestLog,
     handleUpdatePhase, handleDeletePhase, handleAddPhase,
+    handleUpdateNutriSop, handleDeleteNutriSop,
     user, userName, handleLogout,
   ]);
 
