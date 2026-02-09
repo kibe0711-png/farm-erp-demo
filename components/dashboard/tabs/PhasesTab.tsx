@@ -43,8 +43,14 @@ export default function PhasesTab() {
     setSelectedWeek,
     selectedMonday,
     formattedDate,
+    farmSummaries,
     user,
   } = useDashboard();
+
+  const farmNames = useMemo(
+    () => farmSummaries.map((f) => f.farm).sort((a, b) => a.localeCompare(b)),
+    [farmSummaries]
+  );
 
   const canManage = user?.role ? hasPermission(user.role, Permission.MANAGE_CROPS) : false;
 
@@ -277,12 +283,16 @@ export default function PhasesTab() {
                       />
                     </td>
                     <td className="px-4 py-2">
-                      <input
+                      <select
                         value={addValues.farm}
                         onChange={(e) => setAddValues({ ...addValues, farm: e.target.value })}
                         className={inputClass}
-                        placeholder="Farm"
-                      />
+                      >
+                        <option value="">Select farm</option>
+                        {farmNames.map((f) => (
+                          <option key={f} value={f}>{f}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className="px-4 py-2">
                       <input
@@ -358,11 +368,16 @@ export default function PhasesTab() {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
                         {isEditing ? (
-                          <input
+                          <select
                             value={editValues.farm}
                             onChange={(e) => setEditValues({ ...editValues, farm: e.target.value })}
                             className={inputClass}
-                          />
+                          >
+                            <option value="">Select farm</option>
+                            {farmNames.map((f) => (
+                              <option key={f} value={f}>{f}</option>
+                            ))}
+                          </select>
                         ) : (
                           phase.farm
                         )}
