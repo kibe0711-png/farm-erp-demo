@@ -31,6 +31,14 @@ interface ComplianceSummary {
 interface ComplianceData {
   entries: ComplianceEntry[];
   summary: ComplianceSummary;
+  source?: "snapshot" | "live";
+  snapshotAt?: string;
+}
+
+interface SnapshotInfo {
+  exists: boolean;
+  snapshotAt?: string;
+  savedByName?: string;
 }
 
 const STATUS_CELL: Record<Status, { bg: string; text: string; label: string }> = {
@@ -41,14 +49,37 @@ const STATUS_CELL: Record<Status, { bg: string; text: string; label: string }> =
 };
 
 export default function DailyCompliance() {
-  const { phases, selectedMonday, selectedWeek, farmSummaries } = useDashboard();
+  const { phases, selectedMonday, selectedWeek, farmSummaries, user } = useDashboard();
 
   const [selectedFarm, setSelectedFarm] = useState<string | null>(null);
   const [data, setData] = useState<ComplianceData | null>(null);
   const [loading, setLoading] = useState(false);
   const [farmComplianceRates, setFarmComplianceRates] = useState<Record<string, number | null>>({});
 
+  // Snapshot state
+  const [saving, setSaving] = useState(false);
+  const [snapshotInfo, setSnapshotInfo] = useState<SnapshotInfo | null>(null);
+  const [viewMode, setViewMode] = useState<"auto" | "live">("auto");
+
+  const canSaveSnapshot = user?.role === "FARM_MANAGER" || user?.role === "ADMIN";
   const weekStr = selectedMonday.toISOString().split("T")[0];
+  const liveParam = viewMode === "live" ? "&forceLive=true" : "";
+
+  // Check snapshot info when week changes
+  useEffect(() => {
+    async function checkSnapshot() {
+      try {
+        const res = await fetch(`/api/compliance-snapshot?weekStart=${weekStr}`);
+        if (res.ok) {
+          setSnapshotInfo(await res.json());
+        }
+      } catch {
+        // ignore
+      }
+    }
+    checkSnapshot();
+    setViewMode("auto");
+  }, [weekStr]);
 
   // Fetch compliance rates for all farms (for farm cards display)
   const fetchFarmComplianceRates = useCallback(async () => {
@@ -67,7 +98,7 @@ export default function DailyCompliance() {
 
       try {
         const res = await fetch(
-          `/api/compliance?farmPhaseIds=${farmPhaseIds.join(",")}&weekStart=${weekStr}`
+          `/api/compliance?farmPhaseIds=${farmPhaseIds.join(",")}&weekStart=${weekStr}${liveParam}`
         );
         if (res.ok) {
           const complianceData: ComplianceData = await res.json();
@@ -81,7 +112,7 @@ export default function DailyCompliance() {
     }
 
     setFarmComplianceRates(rates);
-  }, [farmSummaries, phases, selectedMonday, weekStr]);
+  }, [farmSummaries, phases, selectedMonday, weekStr, liveParam]);
 
   useEffect(() => {
     if (!selectedFarm && farmSummaries.length > 0) {
@@ -104,7 +135,7 @@ export default function DailyCompliance() {
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/compliance?farmPhaseIds=${farmPhaseIds.join(",")}&weekStart=${weekStr}`
+        `/api/compliance?farmPhaseIds=${farmPhaseIds.join(",")}&weekStart=${weekStr}${liveParam}`
       );
       if (res.ok) {
         setData(await res.json());
@@ -115,11 +146,71 @@ export default function DailyCompliance() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFarm, weekStr, farmPhaseIds.join(",")]);
+  }, [selectedFarm, weekStr, farmPhaseIds.join(","), liveParam]);
 
   useEffect(() => {
     if (selectedFarm) fetchCompliance();
   }, [fetchCompliance, selectedFarm]);
+
+  // Save snapshot for ALL farms this week
+  const handleSaveSnapshot = async () => {
+    if (!confirm("Save compliance snapshot for all farms this week? This will freeze the current compliance data.")) return;
+    setSaving(true);
+    try {
+      // Gather ALL active phase IDs across all farms
+      const allPhaseIds = phases
+        .filter((p) => calculateWeeksSinceSowing(p.sowingDate, selectedMonday) >= 0)
+        .map((p) => p.id);
+
+      if (allPhaseIds.length === 0) {
+        alert("No active phases for this week.");
+        setSaving(false);
+        return;
+      }
+
+      // Fetch live compliance for ALL phases
+      const res = await fetch(
+        `/api/compliance?farmPhaseIds=${allPhaseIds.join(",")}&weekStart=${weekStr}&forceLive=true`
+      );
+      if (!res.ok) throw new Error("Failed to fetch live compliance");
+      const liveData: ComplianceData = await res.json();
+
+      if (liveData.entries.length === 0) {
+        alert("No compliance entries to save for this week.");
+        setSaving(false);
+        return;
+      }
+
+      // Save snapshot
+      const saveRes = await fetch("/api/compliance-snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          weekStartDate: weekStr,
+          entries: liveData.entries,
+        }),
+      });
+      if (!saveRes.ok) throw new Error("Failed to save snapshot");
+
+      // Refresh snapshot info
+      const infoRes = await fetch(`/api/compliance-snapshot?weekStart=${weekStr}`);
+      if (infoRes.ok) setSnapshotInfo(await infoRes.json());
+
+      // Switch to auto mode to see the snapshot
+      setViewMode("auto");
+
+      // Re-fetch current view to show snapshot data
+      if (selectedFarm) fetchCompliance();
+      else fetchFarmComplianceRates();
+
+      alert("Snapshot saved successfully!");
+    } catch (error) {
+      console.error("Failed to save snapshot:", error);
+      alert("Failed to save snapshot. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Group entries by "type-phaseId-task" for table rows
   const groupedRows = data
@@ -170,6 +261,33 @@ export default function DailyCompliance() {
 
       {!selectedFarm ? (
         <>
+          {/* Snapshot controls on farm selection view */}
+          {canSaveSnapshot && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={handleSaveSnapshot}
+                disabled={saving}
+                className="text-sm text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save Snapshot"}
+              </button>
+              {snapshotInfo?.exists && snapshotInfo.snapshotAt && (
+                <span className="text-xs text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200">
+                  Snapshot saved {new Date(snapshotInfo.snapshotAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                  {snapshotInfo.savedByName ? ` by ${snapshotInfo.savedByName}` : ""}
+                </span>
+              )}
+              {snapshotInfo?.exists && (
+                <button
+                  onClick={() => setViewMode(viewMode === "auto" ? "live" : "auto")}
+                  className="text-xs text-orange-600 hover:text-orange-700 underline"
+                >
+                  {viewMode === "auto" ? "View live data" : "View snapshot"}
+                </button>
+              )}
+            </div>
+          )}
+
           {farmSummaries.length === 0 ? (
             <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
               <p className="text-gray-500">No farms found. Upload farm phases first.</p>
@@ -246,17 +364,47 @@ export default function DailyCompliance() {
               <p className="text-sm text-gray-500">
                 Week {selectedWeek} Compliance
               </p>
+              {/* Snapshot badge */}
+              {data?.source === "snapshot" && data?.snapshotAt && (
+                <span className="inline-block mt-1 text-xs text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200">
+                  Snapshot saved {new Date(data.snapshotAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                </span>
+              )}
+              {data?.source === "live" && snapshotInfo?.exists && (
+                <span className="inline-block mt-1 text-xs text-gray-500">Showing live data</span>
+              )}
             </div>
-            {data?.summary.complianceRate !== null && data?.summary.complianceRate !== undefined && (
-              <div className="text-right">
-                <p className="text-3xl font-bold" style={{
-                  color: data.summary.complianceRate >= 80 ? "#16a34a" : data.summary.complianceRate >= 50 ? "#ca8a04" : "#dc2626",
-                }}>
-                  {data.summary.complianceRate}%
-                </p>
-                <p className="text-xs text-gray-500">Compliance Rate</p>
+            <div className="text-right space-y-2">
+              {data?.summary.complianceRate !== null && data?.summary.complianceRate !== undefined && (
+                <div>
+                  <p className="text-3xl font-bold" style={{
+                    color: data.summary.complianceRate >= 80 ? "#16a34a" : data.summary.complianceRate >= 50 ? "#ca8a04" : "#dc2626",
+                  }}>
+                    {data.summary.complianceRate}%
+                  </p>
+                  <p className="text-xs text-gray-500">Compliance Rate</p>
+                </div>
+              )}
+              <div className="flex items-center gap-2 justify-end">
+                {canSaveSnapshot && (
+                  <button
+                    onClick={handleSaveSnapshot}
+                    disabled={saving}
+                    className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : "Save Snapshot"}
+                  </button>
+                )}
+                {snapshotInfo?.exists && (
+                  <button
+                    onClick={() => setViewMode(viewMode === "auto" ? "live" : "auto")}
+                    className="text-xs text-orange-600 hover:text-orange-700 underline"
+                  >
+                    {viewMode === "auto" ? "View live" : "View snapshot"}
+                  </button>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {/* Summary cards */}

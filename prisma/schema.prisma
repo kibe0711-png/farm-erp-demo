@@ -239,3 +239,22 @@ model UserSession {
   @@index([userId, loginAt])
   @@map("user_sessions")
 }
+
+model ComplianceSnapshot {
+  id            Int      @id @default(autoincrement())
+  weekStartDate DateTime @map("week_start_date") @db.Date
+  farmPhaseId   Int      @map("farm_phase_id")
+  phaseId       String   @map("phase_id") @db.VarChar(50)
+  cropCode      String   @map("crop_code") @db.VarChar(50)
+  farm          String   @db.VarChar(100)
+  type          String   @db.VarChar(10)
+  task          String   @db.Text
+  dayOfWeek     Int      @map("day_of_week")
+  status        String   @db.VarChar(10)
+  snapshotAt    DateTime @default(now()) @map("snapshot_at")
+  savedBy       Int      @map("saved_by")
+
+  @@unique([weekStartDate, farmPhaseId, type, task, dayOfWeek])
+  @@index([weekStartDate])
+  @@map("compliance_snapshots")
+}

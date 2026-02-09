@@ -16,6 +16,45 @@ export const GET = withAnalytics(async (request: Request) => {
 
     const farmPhaseIds = idsParam.split(",").map(Number).filter((n) => !isNaN(n));
     const weekDate = new Date(weekStart);
+    const forceLive = searchParams.get("forceLive") === "true";
+
+    // Check for saved snapshot first (unless forceLive is requested)
+    if (!forceLive) {
+      const snapshotDate = new Date(weekStart + "T00:00:00.000Z");
+      const snapshotEntries = await prisma.complianceSnapshot.findMany({
+        where: { weekStartDate: snapshotDate },
+      });
+
+      if (snapshotEntries.length > 0) {
+        const filtered = snapshotEntries
+          .filter((e) => farmPhaseIds.includes(e.farmPhaseId))
+          .map((e) => ({
+            type: e.type as "labor" | "nutri" | "harvest",
+            farmPhaseId: e.farmPhaseId,
+            phaseId: e.phaseId,
+            cropCode: e.cropCode,
+            farm: e.farm,
+            task: e.task,
+            dayOfWeek: e.dayOfWeek,
+            status: e.status as "done" | "missed" | "pending" | "upcoming",
+          }));
+
+        const total = filtered.length;
+        const done = filtered.filter((e) => e.status === "done").length;
+        const missed = filtered.filter((e) => e.status === "missed").length;
+        const pending = filtered.filter((e) => e.status === "pending").length;
+        const upcoming = filtered.filter((e) => e.status === "upcoming").length;
+        const countable = done + missed;
+        const complianceRate = countable > 0 ? Math.round((done / countable) * 100) : null;
+
+        return NextResponse.json({
+          entries: filtered,
+          summary: { total, done, missed, pending, upcoming, complianceRate },
+          source: "snapshot",
+          snapshotAt: snapshotEntries[0].snapshotAt.toISOString(),
+        });
+      }
+    }
 
     // Fetch all data in parallel
     const weekEndDate = new Date(weekDate.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -200,7 +239,7 @@ export const GET = withAnalytics(async (request: Request) => {
     const countable = done + missed; // Only past tasks count toward compliance
     const complianceRate = countable > 0 ? Math.round((done / countable) * 100) : null;
 
-    return NextResponse.json({ entries, summary: { total, done, missed, pending, upcoming, complianceRate } });
+    return NextResponse.json({ entries, summary: { total, done, missed, pending, upcoming, complianceRate }, source: "live" });
   } catch (error) {
     console.error("Failed to fetch compliance:", error);
     return NextResponse.json({ error: "Failed to fetch compliance" }, { status: 500 });
