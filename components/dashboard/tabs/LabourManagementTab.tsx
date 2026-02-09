@@ -7,6 +7,14 @@ import { hasPermission, Permission } from "@/lib/auth/roles";
 import LabourEntryForm from "./LabourEntryForm";
 import LabourPayrollSummary from "./LabourPayrollSummary";
 
+// Local date string helper (avoids UTC shift from toISOString)
+function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 // --- Types ---
 
 interface CasualWorkerItem {
@@ -76,16 +84,15 @@ export default function LabourManagementTab() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
-  const weekStr = selectedMonday.toISOString().split("T")[0];
+  const weekStr = toLocalDateStr(selectedMonday);
 
   // Set default selected date to today (if within week) or Monday
   useEffect(() => {
-    const today = new Date();
-    const todayStr = today.toISOString().split("T")[0];
-    const mondayStr = selectedMonday.toISOString().split("T")[0];
+    const todayStr = toLocalDateStr(new Date());
+    const mondayStr = toLocalDateStr(selectedMonday);
     const sunday = new Date(selectedMonday);
     sunday.setDate(sunday.getDate() + 6);
-    const sundayStr = sunday.toISOString().split("T")[0];
+    const sundayStr = toLocalDateStr(sunday);
 
     if (todayStr >= mondayStr && todayStr <= sundayStr) {
       setSelectedDate(todayStr);
@@ -97,11 +104,11 @@ export default function LabourManagementTab() {
   // Compute week days for the day picker
   const weekDays = useMemo(() => {
     const days = [];
-    const today = new Date().toISOString().split("T")[0];
+    const today = toLocalDateStr(new Date());
     for (let i = 0; i < 7; i++) {
       const d = new Date(selectedMonday);
       d.setDate(d.getDate() + i);
-      const dateStr = d.toISOString().split("T")[0];
+      const dateStr = toLocalDateStr(d);
       days.push({
         date: dateStr,
         label: d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric" }),
