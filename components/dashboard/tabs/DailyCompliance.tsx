@@ -157,18 +157,16 @@ export default function DailyCompliance() {
     if (!confirm("Save compliance snapshot for all farms this week? This will freeze the current compliance data.")) return;
     setSaving(true);
     try {
-      // Fetch ALL phases including archived ones
+      // Fetch ALL phases including archived ones — send all IDs to
+      // the compliance API so it captures any phase that has schedules
+      // for this week, regardless of current sowingDate changes.
       const phasesRes = await fetch("/api/phases?includeArchived=true");
       if (!phasesRes.ok) throw new Error("Failed to fetch phases");
-      const allPhases: { id: number; sowingDate: string }[] = await phasesRes.json();
-
-      // Filter to phases active for this week
-      const allPhaseIds = allPhases
-        .filter((p) => calculateWeeksSinceSowing(p.sowingDate, selectedMonday) >= 0)
-        .map((p) => p.id);
+      const allPhases: { id: number }[] = await phasesRes.json();
+      const allPhaseIds = allPhases.map((p) => p.id);
 
       if (allPhaseIds.length === 0) {
-        alert("No active phases for this week.");
+        alert("No phases found.");
         setSaving(false);
         return;
       }
