@@ -235,8 +235,10 @@ export default function FeedingTab() {
   };
 
   // Helper: get snapshot compliance for a farm
+  // Only count entries where there are actual records (matches live calculation
+  // which only iterates products that have feeding records)
   const getSnapshotFarmCompliance = (farmName: string): number | null => {
-    const farmEntries = snapshotEntries.filter((e) => e.farm === farmName && e.expectedQty > 0);
+    const farmEntries = snapshotEntries.filter((e) => e.farm === farmName && e.expectedQty > 0 && e.actualQty > 0);
     if (farmEntries.length === 0) return null;
     let totalCompliance = 0;
     farmEntries.forEach((e) => {
@@ -499,7 +501,7 @@ export default function FeedingTab() {
                   // Use snapshot compliance if available
                   let phaseCompliance: number | null = null;
                   if (isViewingSnapshot) {
-                    const phaseSnap = getSnapshotPhaseEntries(phase.id).filter((e) => e.expectedQty > 0);
+                    const phaseSnap = getSnapshotPhaseEntries(phase.id).filter((e) => e.expectedQty > 0 && e.actualQty > 0);
                     if (phaseSnap.length > 0) {
                       let total = 0;
                       phaseSnap.forEach((e) => { total += Math.max(0, 100 - Math.abs(e.variance)); });
