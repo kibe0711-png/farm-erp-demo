@@ -152,13 +152,18 @@ export default function DailyCompliance() {
     if (selectedFarm) fetchCompliance();
   }, [fetchCompliance, selectedFarm]);
 
-  // Save snapshot for ALL farms this week
+  // Save snapshot for ALL farms this week (including archived phases)
   const handleSaveSnapshot = async () => {
     if (!confirm("Save compliance snapshot for all farms this week? This will freeze the current compliance data.")) return;
     setSaving(true);
     try {
-      // Gather ALL active phase IDs across all farms
-      const allPhaseIds = phases
+      // Fetch ALL phases including archived ones
+      const phasesRes = await fetch("/api/phases?includeArchived=true");
+      if (!phasesRes.ok) throw new Error("Failed to fetch phases");
+      const allPhases: { id: number; sowingDate: string }[] = await phasesRes.json();
+
+      // Filter to phases active for this week
+      const allPhaseIds = allPhases
         .filter((p) => calculateWeeksSinceSowing(p.sowingDate, selectedMonday) >= 0)
         .map((p) => p.id);
 
@@ -168,7 +173,7 @@ export default function DailyCompliance() {
         return;
       }
 
-      // Fetch live compliance for ALL phases
+      // Fetch live compliance for ALL phases (including archived)
       const res = await fetch(
         `/api/compliance?farmPhaseIds=${allPhaseIds.join(",")}&weekStart=${weekStr}&forceLive=true`
       );
@@ -181,13 +186,38 @@ export default function DailyCompliance() {
         return;
       }
 
+      // For past weeks, finalize pending/upcoming tasks as "missed"
+      // since those tasks can never be completed anymore
+      const now = new Date();
+      const nowEAT = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Kigali" }));
+      const todayDow = (nowEAT.getDay() + 6) % 7; // Mon=0..Sun=6
+      const currentMondayMs = nowEAT.getTime() - todayDow * 24 * 60 * 60 * 1000;
+      const currentMondayDay = Math.floor(currentMondayMs / (24 * 60 * 60 * 1000));
+
+      const weekDate = new Date(weekStr);
+      const utcDay = weekDate.getUTCDay();
+      let actualMondayMs: number;
+      if (utcDay === 0) actualMondayMs = weekDate.getTime() + 24 * 60 * 60 * 1000;
+      else if (utcDay === 1) actualMondayMs = weekDate.getTime();
+      else actualMondayMs = weekDate.getTime() - (utcDay - 1) * 24 * 60 * 60 * 1000;
+      const actualMondayDay = Math.floor(actualMondayMs / (24 * 60 * 60 * 1000));
+
+      const isPastWeek = actualMondayDay < currentMondayDay;
+
+      const finalizedEntries = liveData.entries.map((entry) => {
+        if (isPastWeek && (entry.status === "pending" || entry.status === "upcoming")) {
+          return { ...entry, status: "missed" as Status };
+        }
+        return entry;
+      });
+
       // Save snapshot
       const saveRes = await fetch("/api/compliance-snapshot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           weekStartDate: weekStr,
-          entries: liveData.entries,
+          entries: finalizedEntries,
         }),
       });
       if (!saveRes.ok) throw new Error("Failed to save snapshot");
