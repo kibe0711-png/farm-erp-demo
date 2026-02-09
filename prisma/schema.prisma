@@ -14,6 +14,9 @@ model Farm {
   createdAt       DateTime    @default(now()) @map("created_at")
   phases          FarmPhase[]
   users           User[]
+  casualWorkers   CasualWorker[]
+  activityRates   ActivityRate[]
+  attendanceRecords AttendanceRecord[]
 
   @@map("farms")
 }
@@ -278,4 +281,64 @@ model ComplianceSnapshot {
   @@unique([weekStartDate, farmPhaseId, type, task, dayOfWeek])
   @@index([weekStartDate])
   @@map("compliance_snapshots")
+}
+
+model CasualWorker {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(200)
+  nationalId String? @map("national_id") @db.VarChar(30)
+  phone     String?  @db.VarChar(20)
+  farm      String   @db.VarChar(100)
+  farmId    Int?     @map("farm_id")
+  farmRef   Farm?    @relation(fields: [farmId], references: [id])
+  attendanceRecords AttendanceRecord[]
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([name, farm])
+  @@index([farm])
+  @@index([farmId])
+  @@map("casual_workers")
+}
+
+model ActivityRate {
+  id        Int      @id @default(autoincrement())
+  activity  String   @db.VarChar(200)
+  rate      Decimal  @db.Decimal(10, 2)
+  rateType  String   @default("daily") @map("rate_type") @db.VarChar(10)
+  farm      String   @db.VarChar(100)
+  farmId    Int?     @map("farm_id")
+  farmRef   Farm?    @relation(fields: [farmId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([activity, farm])
+  @@index([farm])
+  @@index([farmId])
+  @@map("activity_rates")
+}
+
+model AttendanceRecord {
+  id              Int          @id @default(autoincrement())
+  casualWorkerId  Int          @map("casual_worker_id")
+  casualWorker    CasualWorker @relation(fields: [casualWorkerId], references: [id])
+  date            DateTime     @db.Date
+  weekStartDate   DateTime     @map("week_start_date") @db.Date
+  farmPhaseId     Int          @map("farm_phase_id")
+  activity        String       @db.VarChar(200)
+  rateType        String       @map("rate_type") @db.VarChar(10)
+  rate            Decimal      @db.Decimal(10, 2)
+  units           Decimal      @default(1) @db.Decimal(10, 2)
+  adjustment      Decimal      @default(0) @db.Decimal(10, 2)
+  amount          Decimal      @db.Decimal(12, 2)
+  farm            String       @db.VarChar(100)
+  farmId          Int?         @map("farm_id")
+  farmRef         Farm?        @relation(fields: [farmId], references: [id])
+  notes           String?      @db.Text
+  recordedBy      Int          @map("recorded_by")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  @@unique([casualWorkerId, date, activity, farmPhaseId])
+  @@index([farm, date])
+  @@index([farmId, date])
+  @@index([weekStartDate, farm])
+  @@map("attendance_records")
 }
