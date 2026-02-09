@@ -240,6 +240,27 @@ model UserSession {
   @@map("user_sessions")
 }
 
+model FeedingSnapshot {
+  id            Int      @id @default(autoincrement())
+  weekStartDate DateTime @map("week_start_date") @db.Date
+  farmPhaseId   Int      @map("farm_phase_id")
+  phaseId       String   @map("phase_id") @db.VarChar(50)
+  cropCode      String   @map("crop_code") @db.VarChar(50)
+  farm          String   @db.VarChar(100)
+  product       String   @db.Text
+  expectedRateHa Decimal @map("expected_rate_ha") @db.Decimal(10, 4)
+  expectedQty   Decimal  @map("expected_qty") @db.Decimal(10, 4)
+  actualQty     Decimal  @map("actual_qty") @db.Decimal(10, 4)
+  actualRateHa  Decimal  @map("actual_rate_ha") @db.Decimal(10, 4)
+  variance      Decimal  @map("variance") @db.Decimal(10, 2)
+  snapshotAt    DateTime @default(now()) @map("snapshot_at")
+  savedBy       Int      @map("saved_by")
+
+  @@unique([weekStartDate, farmPhaseId, product])
+  @@index([weekStartDate])
+  @@map("feeding_snapshots")
+}
+
 model ComplianceSnapshot {
   id            Int      @id @default(autoincrement())
   weekStartDate DateTime @map("week_start_date") @db.Date

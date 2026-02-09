@@ -59,11 +59,8 @@ export default function DailyCompliance() {
   // Snapshot state
   const [saving, setSaving] = useState(false);
   const [snapshotInfo, setSnapshotInfo] = useState<SnapshotInfo | null>(null);
-  const [viewMode, setViewMode] = useState<"auto" | "live">("auto");
-
   const canSaveSnapshot = user?.role === "FARM_MANAGER" || user?.role === "ADMIN";
   const weekStr = selectedMonday.toISOString().split("T")[0];
-  const liveParam = viewMode === "live" ? "&forceLive=true" : "";
 
   // Check snapshot info when week changes
   useEffect(() => {
@@ -78,12 +75,11 @@ export default function DailyCompliance() {
       }
     }
     checkSnapshot();
-    setViewMode("auto");
   }, [weekStr]);
 
   // When viewing a snapshot, skip weeksSinceSowing filter — the snapshot
   // already contains the right phases regardless of current sowingDate.
-  const isViewingSnapshot = viewMode === "auto" && snapshotInfo?.exists;
+  const isViewingSnapshot = !!snapshotInfo?.exists;
 
   // Fetch compliance rates for all farms (for farm cards display)
   const fetchFarmComplianceRates = useCallback(async () => {
@@ -107,7 +103,7 @@ export default function DailyCompliance() {
       try {
         const ids = farmPhaseIds.length > 0 ? farmPhaseIds.join(",") : "0";
         const res = await fetch(
-          `/api/compliance?farmPhaseIds=${ids}&weekStart=${weekStr}${liveParam}${farmParam}`
+          `/api/compliance?farmPhaseIds=${ids}&weekStart=${weekStr}${farmParam}`
         );
         if (res.ok) {
           const complianceData: ComplianceData = await res.json();
@@ -121,7 +117,7 @@ export default function DailyCompliance() {
     }
 
     setFarmComplianceRates(rates);
-  }, [farmSummaries, phases, selectedMonday, weekStr, liveParam, isViewingSnapshot]);
+  }, [farmSummaries, phases, selectedMonday, weekStr, isViewingSnapshot]);
 
   useEffect(() => {
     if (!selectedFarm && farmSummaries.length > 0) {
@@ -146,7 +142,7 @@ export default function DailyCompliance() {
       const ids = farmPhaseIds.length > 0 ? farmPhaseIds.join(",") : "0";
       const farmParam = isViewingSnapshot && selectedFarm ? `&farm=${encodeURIComponent(selectedFarm)}` : "";
       const res = await fetch(
-        `/api/compliance?farmPhaseIds=${ids}&weekStart=${weekStr}${liveParam}${farmParam}`
+        `/api/compliance?farmPhaseIds=${ids}&weekStart=${weekStr}${farmParam}`
       );
       if (res.ok) {
         setData(await res.json());
@@ -157,7 +153,7 @@ export default function DailyCompliance() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFarm, weekStr, farmPhaseIds.join(","), liveParam]);
+  }, [selectedFarm, weekStr, farmPhaseIds.join(",")]);
 
   useEffect(() => {
     if (selectedFarm) fetchCompliance();
@@ -234,9 +230,6 @@ export default function DailyCompliance() {
       // Refresh snapshot info
       const infoRes = await fetch(`/api/compliance-snapshot?weekStart=${weekStr}`);
       if (infoRes.ok) setSnapshotInfo(await infoRes.json());
-
-      // Switch to auto mode to see the snapshot
-      setViewMode("auto");
 
       // Re-fetch current view to show snapshot data
       if (selectedFarm) fetchCompliance();
@@ -315,14 +308,6 @@ export default function DailyCompliance() {
                   Snapshot saved {new Date(snapshotInfo.snapshotAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                   {snapshotInfo.savedByName ? ` by ${snapshotInfo.savedByName}` : ""}
                 </span>
-              )}
-              {snapshotInfo?.exists && (
-                <button
-                  onClick={() => setViewMode(viewMode === "auto" ? "live" : "auto")}
-                  className="text-xs text-orange-600 hover:text-orange-700 underline"
-                >
-                  {viewMode === "auto" ? "View live data" : "View snapshot"}
-                </button>
               )}
             </div>
           )}
@@ -409,9 +394,6 @@ export default function DailyCompliance() {
                   Snapshot saved {new Date(data.snapshotAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                 </span>
               )}
-              {data?.source === "live" && snapshotInfo?.exists && (
-                <span className="inline-block mt-1 text-xs text-gray-500">Showing live data</span>
-              )}
             </div>
             <div className="text-right space-y-2">
               {data?.summary.complianceRate !== null && data?.summary.complianceRate !== undefined && (
@@ -432,14 +414,6 @@ export default function DailyCompliance() {
                     className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded disabled:opacity-50"
                   >
                     {saving ? "Saving..." : "Save Snapshot"}
-                  </button>
-                )}
-                {snapshotInfo?.exists && (
-                  <button
-                    onClick={() => setViewMode(viewMode === "auto" ? "live" : "auto")}
-                    className="text-xs text-orange-600 hover:text-orange-700 underline"
-                  >
-                    {viewMode === "auto" ? "View live" : "View snapshot"}
                   </button>
                 )}
               </div>

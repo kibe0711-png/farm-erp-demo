@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import WeekSelector from "../WeekSelector";
 import {
   useDashboard,
@@ -9,6 +9,26 @@ import {
 } from "../DashboardContext";
 import { isRoleAtLeast, UserRole } from "@/lib/auth/roles";
 import { useAnalytics } from "../../analytics/AnalyticsProvider";
+
+interface FeedingSnapshotEntry {
+  farmPhaseId: number;
+  phaseId: string;
+  cropCode: string;
+  farm: string;
+  product: string;
+  expectedRateHa: number;
+  expectedQty: number;
+  actualQty: number;
+  actualRateHa: number;
+  variance: number;
+}
+
+interface SnapshotInfo {
+  exists: boolean;
+  snapshotAt?: string;
+  savedByName?: string;
+  entryCount?: number;
+}
 
 export default function FeedingTab() {
   const {
@@ -25,6 +45,7 @@ export default function FeedingTab() {
 
   // Compliance summary is only visible to FARM_MANAGER and above
   const canViewCompliance = user ? isRoleAtLeast(user.role, UserRole.FARM_MANAGER) : false;
+  const canSaveSnapshot = user?.role === "FARM_MANAGER" || user?.role === "ADMIN";
 
   const [selectedFarm, setSelectedFarm] = useState<string | null>(null);
   const [selectedPhase, setSelectedPhase] = useState<Phase | null>(null);
@@ -34,6 +55,40 @@ export default function FeedingTab() {
     applicationDate: new Date().toISOString().split("T")[0],
     notes: "",
   });
+
+  // Snapshot state
+  const [saving, setSaving] = useState(false);
+  const [snapshotInfo, setSnapshotInfo] = useState<SnapshotInfo | null>(null);
+  const [snapshotEntries, setSnapshotEntries] = useState<FeedingSnapshotEntry[]>([]);
+
+  const weekStr = selectedMonday.toISOString().split("T")[0];
+  const isViewingSnapshot = !!snapshotInfo?.exists;
+
+  // Check snapshot info when week changes
+  useEffect(() => {
+    async function checkSnapshot() {
+      try {
+        const res = await fetch(`/api/feeding-snapshot?weekStart=${weekStr}`);
+        if (res.ok) {
+          const info = await res.json();
+          setSnapshotInfo(info);
+          if (info.exists) {
+            // Fetch snapshot entries for display
+            const entriesRes = await fetch(`/api/feeding-snapshot?weekStart=${weekStr}&entries=true`);
+            if (entriesRes.ok) {
+              const data = await entriesRes.json();
+              setSnapshotEntries(data.entries || []);
+            }
+          } else {
+            setSnapshotEntries([]);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    checkSnapshot();
+  }, [weekStr]);
 
   const farmPhases = selectedFarm ? phases.filter((p) => p.farm === selectedFarm) : [];
 
@@ -67,11 +122,159 @@ export default function FeedingTab() {
     }
   };
 
+  // Build snapshot entries from current live data
+  const buildSnapshotEntries = useCallback((): FeedingSnapshotEntry[] => {
+    const entries: FeedingSnapshotEntry[] = [];
+    const weekEnd = new Date(selectedMonday);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    for (const phase of phases) {
+      const ws = calculateWeeksSinceSowing(phase.sowingDate, selectedMonday);
+      const areaHa = parseFloat(String(phase.areaHa)) || 0;
+      const phaseSops = nutriSop.filter((s) => s.cropCode === phase.cropCode && s.week === ws);
+      const phaseRecords = feedingRecords.filter((r) => {
+        const d = new Date(r.applicationDate);
+        return r.farmPhaseId === phase.id && d >= selectedMonday && d <= weekEnd;
+      });
+
+      // Build actual quantities by product
+      const actualByProduct: Record<string, { qty: number; rateHa: number }> = {};
+      phaseRecords.forEach((r) => {
+        if (!actualByProduct[r.product]) actualByProduct[r.product] = { qty: 0, rateHa: 0 };
+        actualByProduct[r.product].qty += parseFloat(String(r.actualQty)) || 0;
+        actualByProduct[r.product].rateHa += parseFloat(String(r.actualRateHa)) || 0;
+      });
+
+      // For each SOP product, create an entry
+      for (const sop of phaseSops) {
+        const expRate = parseFloat(String(sop.rateHa)) || 0;
+        const expQty = expRate * areaHa;
+        const actual = actualByProduct[sop.products] || { qty: 0, rateHa: 0 };
+        const variance = expQty > 0 ? ((actual.qty - expQty) / expQty) * 100 : 0;
+
+        entries.push({
+          farmPhaseId: phase.id,
+          phaseId: phase.phaseId,
+          cropCode: phase.cropCode,
+          farm: phase.farm,
+          product: sop.products,
+          expectedRateHa: expRate,
+          expectedQty: expQty,
+          actualQty: actual.qty,
+          actualRateHa: actual.rateHa,
+          variance: parseFloat(variance.toFixed(2)),
+        });
+      }
+
+      // Also include products that were recorded but not in SOP
+      for (const [product, actual] of Object.entries(actualByProduct)) {
+        if (!phaseSops.some((s) => s.products === product)) {
+          entries.push({
+            farmPhaseId: phase.id,
+            phaseId: phase.phaseId,
+            cropCode: phase.cropCode,
+            farm: phase.farm,
+            product,
+            expectedRateHa: 0,
+            expectedQty: 0,
+            actualQty: actual.qty,
+            actualRateHa: actual.rateHa,
+            variance: 0,
+          });
+        }
+      }
+    }
+
+    return entries;
+  }, [phases, nutriSop, feedingRecords, selectedMonday]);
+
+  const handleSaveSnapshot = async () => {
+    if (!confirm("Save feeding snapshot for all farms this week? This will freeze the current feeding compliance data.")) return;
+    setSaving(true);
+    try {
+      const entries = buildSnapshotEntries();
+
+      if (entries.length === 0) {
+        alert("No feeding compliance entries to save for this week.");
+        setSaving(false);
+        return;
+      }
+
+      const saveRes = await fetch("/api/feeding-snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          weekStartDate: weekStr,
+          entries,
+        }),
+      });
+      if (!saveRes.ok) throw new Error("Failed to save snapshot");
+
+      // Refresh snapshot info
+      const infoRes = await fetch(`/api/feeding-snapshot?weekStart=${weekStr}`);
+      if (infoRes.ok) {
+        const info = await infoRes.json();
+        setSnapshotInfo(info);
+      }
+
+      // Refresh snapshot entries
+      const entriesRes = await fetch(`/api/feeding-snapshot?weekStart=${weekStr}&entries=true`);
+      if (entriesRes.ok) {
+        const data = await entriesRes.json();
+        setSnapshotEntries(data.entries || []);
+      }
+
+      alert("Feeding snapshot saved successfully!");
+    } catch (error) {
+      console.error("Failed to save feeding snapshot:", error);
+      alert("Failed to save snapshot. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Helper: get snapshot compliance for a farm
+  const getSnapshotFarmCompliance = (farmName: string): number | null => {
+    const farmEntries = snapshotEntries.filter((e) => e.farm === farmName && e.expectedQty > 0);
+    if (farmEntries.length === 0) return null;
+    let totalCompliance = 0;
+    farmEntries.forEach((e) => {
+      totalCompliance += Math.max(0, 100 - Math.abs(e.variance));
+    });
+    return totalCompliance / farmEntries.length;
+  };
+
+  // Helper: get snapshot entries for a specific phase
+  const getSnapshotPhaseEntries = (farmPhaseId: number): FeedingSnapshotEntry[] => {
+    return snapshotEntries.filter((e) => e.farmPhaseId === farmPhaseId);
+  };
+
   // ── Farm cards view ──────────────────────────────────────────────
   if (!selectedFarm) {
     return (
       <div className="space-y-6">
         <WeekSelector />
+
+        {/* Snapshot controls */}
+        {canSaveSnapshot && (
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={handleSaveSnapshot}
+              disabled={saving}
+              className="text-sm text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save Snapshot"}
+            </button>
+            {snapshotInfo?.exists && snapshotInfo.snapshotAt && (
+              <span className="text-xs text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200">
+                Snapshot saved {new Date(snapshotInfo.snapshotAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                {snapshotInfo.savedByName ? ` by ${snapshotInfo.savedByName}` : ""}
+              </span>
+            )}
+          </div>
+        )}
+
         {farmSummaries.length === 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
             <p className="text-gray-500">No farms found. Upload farm phases first.</p>
@@ -80,6 +283,58 @@ export default function FeedingTab() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {farmSummaries.map((farm) => {
               const fp = phases.filter((p) => p.farm === farm.farm);
+
+              // Use snapshot data if available
+              if (isViewingSnapshot) {
+                const snapshotCompliance = getSnapshotFarmCompliance(farm.farm);
+                const farmSnapshotEntries = snapshotEntries.filter((e) => e.farm === farm.farm);
+                const totalExpected = farmSnapshotEntries.filter((e) => e.expectedQty > 0).length;
+                const totalActual = farmSnapshotEntries.filter((e) => e.actualQty > 0).length;
+
+                return (
+                  <button
+                    key={farm.farm}
+                    onClick={() => { setSelectedFarm(farm.farm); setSelectedPhase(null); }}
+                    className="bg-white rounded-xl border border-gray-200 p-8 text-left hover:border-teal-300 hover:shadow-lg transition-all"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900">{farm.farm}</h3>
+                        <p className="text-sm text-gray-500">{farm.phaseCount} phase{farm.phaseCount !== 1 ? "s" : ""}</p>
+                      </div>
+                      <p className="text-3xl font-bold text-green-600">{farm.totalAcreage.toFixed(2)} <span className="text-lg">Ha</span></p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 py-4 border-t border-b border-gray-100">
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-blue-600">{totalExpected}</p>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide">Expected</p>
+                      </div>
+                      <div className="text-center">
+                        <p className={`text-2xl font-bold ${totalActual >= totalExpected ? "text-green-600" : "text-orange-500"}`}>{totalActual}</p>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide">Actual</p>
+                      </div>
+                    </div>
+                    {canViewCompliance && snapshotCompliance !== null && (
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm text-gray-600 font-medium">Compliance</span>
+                          <span className={`text-lg font-bold ${snapshotCompliance >= 95 ? "text-green-600" : snapshotCompliance >= 80 ? "text-yellow-600" : "text-red-600"}`}>
+                            {snapshotCompliance.toFixed(0)}%
+                          </span>
+                        </div>
+                        <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${snapshotCompliance >= 95 ? "bg-green-500" : snapshotCompliance >= 80 ? "bg-yellow-500" : "bg-red-500"}`}
+                            style={{ width: `${Math.min(100, snapshotCompliance)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                );
+              }
+
+              // Live computation
               const phasesNeeding = fp.filter((ph) => {
                 const ws = calculateWeeksSinceSowing(ph.sowingDate, selectedMonday);
                 return nutriSop.some((s) => s.cropCode === ph.cropCode && s.week === ws);
@@ -199,9 +454,16 @@ export default function FeedingTab() {
       <div className="space-y-6">
         <WeekSelector />
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <button onClick={() => setSelectedFarm(null)} className="text-sm text-teal-600 hover:text-teal-700 mb-2">
-            &larr; Back to farms
-          </button>
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={() => setSelectedFarm(null)} className="text-sm text-teal-600 hover:text-teal-700">
+              &larr; Back to farms
+            </button>
+            {snapshotInfo?.exists && snapshotInfo.snapshotAt && (
+              <span className="text-xs text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200">
+                Snapshot saved {new Date(snapshotInfo.snapshotAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+              </span>
+            )}
+          </div>
           <h2 className="text-xl font-semibold text-gray-900">{selectedFarm}</h2>
           <p className="text-green-600 font-medium mb-4">
             {farmSummaries.find((f) => f.farm === selectedFarm)?.totalAcreage.toFixed(2)} Ha total
@@ -234,28 +496,40 @@ export default function FeedingTab() {
                     return r.farmPhaseId === phase.id && d >= weekStart && d <= weekEnd;
                   });
 
-                  // Compliance color for phase name
-                  const areaHa = parseFloat(String(phase.areaHa)) || 0;
-                  const byProduct: Record<string, number> = {};
-                  phaseRecordsThisWeek.forEach((r) => {
-                    byProduct[r.product] = (byProduct[r.product] || 0) + (parseFloat(String(r.actualQty)) || 0);
-                  });
-                  let totalCompliance = 0;
-                  let complianceCount = 0;
-                  Object.entries(byProduct).forEach(([product, actualQty]) => {
-                    const sopEntry = nutriSop.find(
-                      (s) => s.cropCode === phase.cropCode && s.products === product && s.week === ws
-                    );
-                    if (sopEntry) {
-                      const expectedQty = (parseFloat(String(sopEntry.rateHa)) || 0) * areaHa;
-                      if (expectedQty > 0) {
-                        const variance = Math.abs((actualQty - expectedQty) / expectedQty) * 100;
-                        totalCompliance += Math.max(0, 100 - variance);
-                        complianceCount++;
-                      }
+                  // Use snapshot compliance if available
+                  let phaseCompliance: number | null = null;
+                  if (isViewingSnapshot) {
+                    const phaseSnap = getSnapshotPhaseEntries(phase.id).filter((e) => e.expectedQty > 0);
+                    if (phaseSnap.length > 0) {
+                      let total = 0;
+                      phaseSnap.forEach((e) => { total += Math.max(0, 100 - Math.abs(e.variance)); });
+                      phaseCompliance = total / phaseSnap.length;
                     }
-                  });
-                  const phaseCompliance = complianceCount > 0 ? totalCompliance / complianceCount : null;
+                  } else {
+                    // Live compliance calculation
+                    const areaHa = parseFloat(String(phase.areaHa)) || 0;
+                    const byProduct: Record<string, number> = {};
+                    phaseRecordsThisWeek.forEach((r) => {
+                      byProduct[r.product] = (byProduct[r.product] || 0) + (parseFloat(String(r.actualQty)) || 0);
+                    });
+                    let totalCompliance = 0;
+                    let complianceCount = 0;
+                    Object.entries(byProduct).forEach(([product, actualQty]) => {
+                      const sopEntry = nutriSop.find(
+                        (s) => s.cropCode === phase.cropCode && s.products === product && s.week === ws
+                      );
+                      if (sopEntry) {
+                        const expectedQty = (parseFloat(String(sopEntry.rateHa)) || 0) * areaHa;
+                        if (expectedQty > 0) {
+                          const variance = Math.abs((actualQty - expectedQty) / expectedQty) * 100;
+                          totalCompliance += Math.max(0, 100 - variance);
+                          complianceCount++;
+                        }
+                      }
+                    });
+                    phaseCompliance = complianceCount > 0 ? totalCompliance / complianceCount : null;
+                  }
+
                   // Compliance-based coloring only for FARM_MANAGER+
                   const phaseColorClass =
                     !canViewCompliance || phaseCompliance === null
@@ -321,13 +595,23 @@ export default function FeedingTab() {
     ? [...new Set(nutriSop.filter((s) => s.cropCode === selectedPhase.cropCode).map((s) => s.products))]
     : [];
 
+  // Snapshot entries for this specific phase
+  const phaseSnapshotEntries = selectedPhase ? getSnapshotPhaseEntries(selectedPhase.id) : [];
+
   return (
     <div className="space-y-6">
       <WeekSelector />
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <button onClick={() => setSelectedPhase(null)} className="text-sm text-teal-600 hover:text-teal-700 mb-2">
-          &larr; Back to phases
-        </button>
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => setSelectedPhase(null)} className="text-sm text-teal-600 hover:text-teal-700">
+            &larr; Back to phases
+          </button>
+          {snapshotInfo?.exists && snapshotInfo.snapshotAt && (
+            <span className="text-xs text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200">
+              Snapshot saved {new Date(snapshotInfo.snapshotAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            </span>
+          )}
+        </div>
         <h2 className="text-xl font-semibold text-gray-900">
           {selectedPhase!.phaseId} - {selectedPhase!.cropCode}
         </h2>
@@ -426,7 +710,41 @@ export default function FeedingTab() {
           </form>
         </div>
 
-        {/* Compliance + Records */}
+        {/* Snapshot Compliance Summary - shown when snapshot exists */}
+        {isViewingSnapshot && canViewCompliance && phaseSnapshotEntries.length > 0 && (
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+            <h3 className="text-sm font-medium text-blue-800 mb-3">Compliance Summary (Snapshot)</h3>
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-blue-200">
+                  <th className="text-left py-2 px-2 font-medium text-blue-700">Product</th>
+                  <th className="text-left py-2 px-2 font-medium text-blue-700">Expected Rate/Ha</th>
+                  <th className="text-left py-2 px-2 font-medium text-blue-700">Actual Rate/Ha</th>
+                  <th className="text-left py-2 px-2 font-medium text-blue-700">Expected Qty</th>
+                  <th className="text-left py-2 px-2 font-medium text-blue-700">Actual Qty</th>
+                  <th className="text-left py-2 px-2 font-medium text-blue-700">Variance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {phaseSnapshotEntries.map((entry, idx) => (
+                  <tr key={idx} className="border-b border-blue-100">
+                    <td className="py-2 px-2 font-medium">{entry.product}</td>
+                    <td className="py-2 px-2">{entry.expectedRateHa.toFixed(2)}</td>
+                    <td className="py-2 px-2">{entry.actualRateHa.toFixed(2)}</td>
+                    <td className="py-2 px-2">{entry.expectedQty.toFixed(2)}</td>
+                    <td className="py-2 px-2">{entry.actualQty.toFixed(2)}</td>
+                    <td className={`py-2 px-2 font-medium ${entry.variance > 5 ? "text-red-600" : entry.variance < -5 ? "text-orange-600" : "text-green-600"}`}>
+                      {entry.variance > 0 ? "+" : ""}{entry.variance.toFixed(1)}%
+                      {entry.variance > 5 ? " (Over)" : entry.variance < -5 ? " (Under)" : " (OK)"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Live Compliance + Records */}
         {phaseRecords.length > 0 && (() => {
           const expectedProducts = nutriSop.filter((s) => s.cropCode === selectedPhase!.cropCode);
           const byProduct: Record<string, { totalQty: number; totalRateHa: number }> = {};
@@ -438,8 +756,8 @@ export default function FeedingTab() {
 
           return (
             <>
-              {/* Compliance Summary - visible to FARM_MANAGER+ only */}
-              {canViewCompliance && (
+              {/* Live Compliance Summary - visible to FARM_MANAGER+ only, hidden when snapshot shown */}
+              {canViewCompliance && !isViewingSnapshot && (
                 <div className="mb-6 p-4 bg-blue-50 rounded-lg">
                   <h3 className="text-sm font-medium text-blue-800 mb-3">Compliance Summary</h3>
                   <table className="min-w-full text-sm">
