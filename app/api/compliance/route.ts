@@ -17,6 +17,7 @@ export const GET = withAnalytics(async (request: Request) => {
     const farmPhaseIds = idsParam.split(",").map(Number).filter((n) => !isNaN(n));
     const weekDate = new Date(weekStart);
     const forceLive = searchParams.get("forceLive") === "true";
+    const farmFilter = searchParams.get("farm"); // Optional: filter snapshot by farm name
 
     // Check for saved snapshot first (unless forceLive is requested)
     if (!forceLive) {
@@ -26,8 +27,10 @@ export const GET = withAnalytics(async (request: Request) => {
       });
 
       if (snapshotEntries.length > 0) {
+        // When farm filter is provided, use it instead of farmPhaseIds
+        // This ensures snapshot entries are shown even when phase sowingDate changed
         const filtered = snapshotEntries
-          .filter((e) => farmPhaseIds.includes(e.farmPhaseId))
+          .filter((e) => farmFilter ? e.farm === farmFilter : farmPhaseIds.includes(e.farmPhaseId))
           .map((e) => ({
             type: e.type as "labor" | "nutri" | "harvest",
             farmPhaseId: e.farmPhaseId,

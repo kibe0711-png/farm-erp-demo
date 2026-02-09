@@ -81,6 +81,10 @@ export default function DailyCompliance() {
     setViewMode("auto");
   }, [weekStr]);
 
+  // When viewing a snapshot, skip weeksSinceSowing filter — the snapshot
+  // already contains the right phases regardless of current sowingDate.
+  const isViewingSnapshot = viewMode === "auto" && snapshotInfo?.exists;
+
   // Fetch compliance rates for all farms (for farm cards display)
   const fetchFarmComplianceRates = useCallback(async () => {
     const rates: Record<string, number | null> = {};
@@ -88,17 +92,22 @@ export default function DailyCompliance() {
     for (const farm of farmSummaries) {
       const farmPhaseIds = phases
         .filter((p) => p.farm === farm.farm)
-        .filter((p) => calculateWeeksSinceSowing(p.sowingDate, selectedMonday) >= 0)
+        .filter((p) => isViewingSnapshot || calculateWeeksSinceSowing(p.sowingDate, selectedMonday) >= 0)
         .map((p) => p.id);
 
-      if (farmPhaseIds.length === 0) {
+      // When viewing snapshot, pass farm name so API can match by farm
+      // even if phase IDs are incomplete due to sowingDate changes
+      const farmParam = isViewingSnapshot ? `&farm=${encodeURIComponent(farm.farm)}` : "";
+
+      if (farmPhaseIds.length === 0 && !isViewingSnapshot) {
         rates[farm.farm] = null;
         continue;
       }
 
       try {
+        const ids = farmPhaseIds.length > 0 ? farmPhaseIds.join(",") : "0";
         const res = await fetch(
-          `/api/compliance?farmPhaseIds=${farmPhaseIds.join(",")}&weekStart=${weekStr}${liveParam}`
+          `/api/compliance?farmPhaseIds=${ids}&weekStart=${weekStr}${liveParam}${farmParam}`
         );
         if (res.ok) {
           const complianceData: ComplianceData = await res.json();
@@ -112,7 +121,7 @@ export default function DailyCompliance() {
     }
 
     setFarmComplianceRates(rates);
-  }, [farmSummaries, phases, selectedMonday, weekStr, liveParam]);
+  }, [farmSummaries, phases, selectedMonday, weekStr, liveParam, isViewingSnapshot]);
 
   useEffect(() => {
     if (!selectedFarm && farmSummaries.length > 0) {
@@ -123,19 +132,21 @@ export default function DailyCompliance() {
   const farmPhaseIds = selectedFarm
     ? phases
         .filter((p) => p.farm === selectedFarm)
-        .filter((p) => calculateWeeksSinceSowing(p.sowingDate, selectedMonday) >= 0)
+        .filter((p) => isViewingSnapshot || calculateWeeksSinceSowing(p.sowingDate, selectedMonday) >= 0)
         .map((p) => p.id)
     : [];
 
   const fetchCompliance = useCallback(async () => {
-    if (farmPhaseIds.length === 0) {
+    if (farmPhaseIds.length === 0 && !isViewingSnapshot) {
       setData(null);
       return;
     }
     setLoading(true);
     try {
+      const ids = farmPhaseIds.length > 0 ? farmPhaseIds.join(",") : "0";
+      const farmParam = isViewingSnapshot && selectedFarm ? `&farm=${encodeURIComponent(selectedFarm)}` : "";
       const res = await fetch(
-        `/api/compliance?farmPhaseIds=${farmPhaseIds.join(",")}&weekStart=${weekStr}${liveParam}`
+        `/api/compliance?farmPhaseIds=${ids}&weekStart=${weekStr}${liveParam}${farmParam}`
       );
       if (res.ok) {
         setData(await res.json());
