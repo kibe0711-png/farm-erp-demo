@@ -4,7 +4,7 @@ import { useState } from "react";
 import { DashboardProvider } from "./DashboardContext";
 import { AnalyticsProvider } from "../analytics/AnalyticsProvider";
 import Sidebar, { type SidebarTab } from "./Sidebar";
-import PhasesView from "./tabs/PhasesView";
+import PhasesTab from "./tabs/PhasesTab";
 import LaborSopTab from "./tabs/LaborSopTab";
 import NutriSopTab from "./tabs/NutriSopTab";
 import KeyInputsTab from "./tabs/KeyInputsTab";
@@ -34,7 +34,7 @@ export default function DashboardShell() {
               sidebarCollapsed ? "ml-16" : "ml-64"
             }`}
           >
-            {activeSection === "phases" && <PhasesView />}
+            {activeSection === "phases" && <PhasesTab />}
             {activeSection === "labor" && <LaborSopTab />}
             {activeSection === "nutri" && <NutriSopTab />}
             {activeSection === "keyInputs" && <KeyInputsTab />}

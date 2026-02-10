@@ -202,7 +202,7 @@ export default function LabourEntryForm({
             <option value="">Select phase...</option>
             {farmPhases.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.phaseId} — {p.cropCode}
+                {p.cropCode === "GENERAL" ? "General (Farm overhead)" : `${p.phaseId} — ${p.cropCode}`}
               </option>
             ))}
           </select>

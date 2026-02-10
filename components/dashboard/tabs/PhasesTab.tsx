@@ -104,6 +104,7 @@ export default function PhasesTab() {
   const archivedCount = phasesWithWeeks.filter((p) => p.archived).length;
   const filteredPhases = useMemo(
     () => phasesWithWeeks
+      .filter((p) => p.cropCode !== "GENERAL")
       .filter((p) => showArchived ? p.archived : !p.archived)
       .sort((a, b) => a.cropCode.localeCompare(b.cropCode) || a.phaseId.localeCompare(b.phaseId)),
     [phasesWithWeeks, showArchived]

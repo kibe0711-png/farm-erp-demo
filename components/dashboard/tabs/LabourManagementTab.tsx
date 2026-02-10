@@ -67,6 +67,7 @@ export default function LabourManagementTab() {
     selectedWeek,
     selectedYear,
     user,
+    handleAddPhase,
   } = useDashboard();
 
   const canEdit = !!user && hasPermission(user.role, Permission.ENTRY_LABOR);
@@ -118,11 +119,36 @@ export default function LabourManagementTab() {
     return days;
   }, [selectedMonday]);
 
-  // Farm phases for the selected farm
+  // Farm phases for the selected farm (General phase listed first)
   const farmPhases = useMemo(
-    () => phases.filter((p) => p.farm === selectedFarm && !p.archived),
+    () => phases
+      .filter((p) => p.farm === selectedFarm && !p.archived)
+      .sort((a, b) => {
+        if (a.cropCode === "GENERAL" && b.cropCode !== "GENERAL") return -1;
+        if (a.cropCode !== "GENERAL" && b.cropCode === "GENERAL") return 1;
+        return a.phaseId.localeCompare(b.phaseId);
+      }),
     [phases, selectedFarm]
   );
+
+  // Auto-create a GENERAL phase for the farm if one doesn't exist
+  useEffect(() => {
+    if (!selectedFarm) return;
+    const hasGeneral = phases.some((p) => p.farm === selectedFarm && p.cropCode === "GENERAL" && !p.archived);
+    if (!hasGeneral) {
+      const today = new Date();
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, "0");
+      const d = String(today.getDate()).padStart(2, "0");
+      handleAddPhase({
+        cropCode: "GENERAL",
+        phaseId: "General",
+        sowingDate: `${y}-${m}-${d}`,
+        farm: selectedFarm,
+        areaHa: "0",
+      }).catch(() => { /* ignore if user lacks permission — phase may already exist */ });
+    }
+  }, [selectedFarm, phases, handleAddPhase]);
 
   // --- Data Fetching ---
 
@@ -230,7 +256,8 @@ export default function LabourManagementTab() {
 
   const getPhaseLabel = (farmPhaseId: number) => {
     const phase = phases.find((p) => p.id === farmPhaseId);
-    return phase ? `${phase.phaseId} (${phase.cropCode})` : `Phase #${farmPhaseId}`;
+    if (!phase) return `Phase #${farmPhaseId}`;
+    return phase.cropCode === "GENERAL" ? "General" : `${phase.phaseId} (${phase.cropCode})`;
   };
 
   // ==========================================
