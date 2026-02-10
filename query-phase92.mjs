@@ -47,14 +47,6 @@ async function main() {
     console.log(JSON.stringify(harvestSchedules, null, 2));
   }
 
-  // Bonus: related logs and overrides
-  console.log("\n=== LaborLog (farmPhaseId=92) ===");
-  const laborLogs = await prisma.laborLog.findMany({ where: { farmPhaseId: 92 } });
-  console.log(`Count: ${laborLogs.length}`);
-  if (laborLogs.length > 0) {
-    console.log(JSON.stringify(laborLogs, null, 2));
-  }
-
   console.log("\n=== FeedingRecord (farmPhaseId=92) ===");
   const feedingRecords = await prisma.feedingRecord.findMany({ where: { farmPhaseId: 92 } });
   console.log(`Count: ${feedingRecords.length}`);

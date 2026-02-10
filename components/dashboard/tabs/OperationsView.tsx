@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect } from "react";
 import LaborActivitiesTab from "./LaborActivitiesTab";
 import NutriActivitiesTab from "./NutriActivitiesTab";
 import FeedingTab from "./FeedingTab";
-import LaborLogsTab from "./LaborLogsTab";
 import DailyCompliance from "./DailyCompliance";
 import HarvestingTab from "./HarvestingTab";
 import HarvestRecordsTab from "./HarvestRecordsTab";
@@ -13,12 +12,11 @@ import { useDashboard } from "../DashboardContext";
 import { isRoleAtLeast, UserRole } from "@/lib/auth/roles";
 import { useAnalytics } from "../../analytics/AnalyticsProvider";
 
-type OpsTab = "activities" | "nutriActivities" | "feeding" | "laborLogs" | "compliance" | "harvesting" | "harvestRecords" | "harvestPerformance";
+type OpsTab = "activities" | "nutriActivities" | "feeding" | "compliance" | "harvesting" | "harvestRecords" | "harvestPerformance";
 
 const ALL_TABS: { id: OpsTab; label: string; minRole?: string }[] = [
   { id: "compliance", label: "Compliance" },
   { id: "activities", label: "Labor Activities" },
-  { id: "laborLogs", label: "Labor Logs" },
   { id: "nutriActivities", label: "Nutri Activities" },
   { id: "feeding", label: "Feeding" },
   { id: "harvestRecords", label: "Harvest Records" },
@@ -59,8 +57,6 @@ export default function OperationsView() {
                 activeTab === tab.id
                   ? tab.id === "feeding"
                     ? "border-teal-500 text-teal-600"
-                    : tab.id === "laborLogs"
-                    ? "border-indigo-500 text-indigo-600"
                     : tab.id === "compliance"
                     ? "border-orange-500 text-orange-600"
                     : tab.id === "harvesting"
@@ -82,7 +78,6 @@ export default function OperationsView() {
       {/* Tab content */}
       {activeTab === "compliance" && <DailyCompliance />}
       {activeTab === "activities" && <LaborActivitiesTab />}
-      {activeTab === "laborLogs" && <LaborLogsTab />}
       {activeTab === "nutriActivities" && <NutriActivitiesTab />}
       {activeTab === "feeding" && <FeedingTab />}
       {activeTab === "harvestRecords" && <HarvestRecordsTab />}
