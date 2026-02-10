@@ -256,7 +256,7 @@ export default function LabourManagementTab() {
                 <button
                   key={farm.farm}
                   onClick={() => setSelectedFarm(farm.farm)}
-                  className="bg-white rounded-xl border border-gray-200 p-6 text-left hover:border-purple-300 hover:shadow-lg transition-all"
+                  className="bg-white rounded-xl border border-gray-200 p-6 text-left hover:border-green-300 hover:shadow-lg transition-all"
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div>
@@ -266,7 +266,7 @@ export default function LabourManagementTab() {
                   </div>
                   <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-100">
                     <div className="text-center">
-                      <p className="text-xl font-bold text-purple-600">{summary?.totalCasuals || 0}</p>
+                      <p className="text-xl font-bold text-blue-600">{summary?.totalCasuals || 0}</p>
                       <p className="text-xs text-gray-500 uppercase tracking-wide">Casuals</p>
                     </div>
                     <div className="text-center">
@@ -315,7 +315,7 @@ export default function LabourManagementTab() {
             onClick={() => setSelectedDate(day.date)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors relative ${
               selectedDate === day.date
-                ? "bg-purple-600 text-white"
+                ? "bg-green-600 text-white"
                 : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
             }`}
           >
@@ -336,7 +336,7 @@ export default function LabourManagementTab() {
         {canEdit && (
           <button
             onClick={() => setShowForm(!showForm)}
-            className="bg-purple-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-purple-700"
+            className="bg-green-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-green-700"
           >
             {showForm ? "Cancel" : "Add Entry"}
           </button>
@@ -427,6 +427,7 @@ export default function LabourManagementTab() {
         selectedWeek={selectedWeek}
         selectedYear={selectedYear}
         weekStr={weekStr}
+        getPhaseLabel={getPhaseLabel}
       />
     </div>
   );

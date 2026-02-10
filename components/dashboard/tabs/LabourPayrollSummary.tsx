@@ -8,9 +8,13 @@ interface AttendanceRecordItem {
   casualWorkerId: number;
   casualWorker: { name: string; nationalId: string | null };
   date: string;
+  farmPhaseId: number;
+  activity: string;
   rateType: string;
-  amount: number;
+  rate: number;
+  units: number;
   adjustment: number;
+  amount: number;
 }
 
 interface PayrollRow {
@@ -29,6 +33,7 @@ interface LabourPayrollSummaryProps {
   selectedWeek: number;
   selectedYear: number;
   weekStr: string;
+  getPhaseLabel: (farmPhaseId: number) => string;
 }
 
 export default function LabourPayrollSummary({
@@ -37,6 +42,7 @@ export default function LabourPayrollSummary({
   selectedWeek,
   selectedYear,
   weekStr,
+  getPhaseLabel,
 }: LabourPayrollSummaryProps) {
   const payrollSummary: PayrollRow[] = useMemo(() => {
     const byCasual = new Map<number, {
@@ -83,13 +89,14 @@ export default function LabourPayrollSummary({
     [payrollSummary]
   );
 
+  // Detailed PDF — one row per attendance record
   const exportPayrollPdf = () => {
-    if (payrollSummary.length === 0) return;
+    if (weekRecords.length === 0) return;
 
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
-    const margin = 14;
+    const margin = 10;
     const contentW = pageW - margin * 2;
     let y = margin;
 
@@ -97,12 +104,15 @@ export default function LabourPayrollSummary({
       if (y + needed > pageH - 12) {
         doc.addPage();
         y = margin;
+        return true;
       }
+      return false;
     };
 
+    // Title
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(30, 64, 175);
+    doc.setTextColor(22, 101, 52); // green-800
     doc.text(`${selectedFarm} — Weekly Payroll Report`, margin, y);
     y += 6;
 
@@ -112,39 +122,77 @@ export default function LabourPayrollSummary({
     doc.text(`Week ${selectedWeek}, ${selectedYear} (${weekStr})`, margin, y);
     y += 8;
 
-    doc.setFillColor(243, 244, 246);
-    doc.rect(margin, y - 3.5, contentW, 5.5, "F");
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(55, 65, 81);
+    // Sort records by name then date for PDF
+    const sorted = [...weekRecords].sort((a, b) => {
+      const nameComp = a.casualWorker.name.localeCompare(b.casualWorker.name);
+      if (nameComp !== 0) return nameComp;
+      return a.date.localeCompare(b.date);
+    });
 
-    const cols = [margin, margin + 80, margin + 100, margin + 130, margin + 160, margin + 190];
-    const headers = ["Name", "Days", "Daily Pay (RWF)", "Per-kg Pay (RWF)", "Adjustments (RWF)", "Total (RWF)"];
-    headers.forEach((h, i) => doc.text(h, cols[i] + 1, y));
-    y += 5;
+    // Table header
+    const drawHeader = () => {
+      doc.setFillColor(243, 244, 246);
+      doc.rect(margin, y - 3.5, contentW, 5.5, "F");
+      doc.setFontSize(6.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(55, 65, 81);
 
+      const headers = ["#", "Name", "Date", "Phase", "Activity", "Type", "Rate", "Units", "Adj.", "Amount"];
+      const colX = [margin, margin + 8, margin + 58, margin + 80, margin + 110, margin + 155, margin + 175, margin + 200, margin + 220, margin + 240];
+      headers.forEach((h, i) => doc.text(h, colX[i] + 1, y));
+      y += 5;
+    };
+
+    drawHeader();
+
+    // Detail rows
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
+    doc.setFontSize(6.5);
     doc.setTextColor(31, 41, 55);
 
-    for (const row of payrollSummary) {
-      checkPage(5);
-      doc.text(row.name, cols[0] + 1, y);
-      doc.text(String(row.daysWorked), cols[1] + 1, y);
-      doc.text(row.dailyPay.toLocaleString(), cols[2] + 1, y);
-      doc.text(row.perKgPay.toLocaleString(), cols[3] + 1, y);
-      doc.text(row.adjustments.toLocaleString(), cols[4] + 1, y);
-      doc.text(row.totalPay.toLocaleString(), cols[5] + 1, y);
-      y += 4.5;
-    }
+    const colX = [margin, margin + 8, margin + 58, margin + 80, margin + 110, margin + 155, margin + 175, margin + 200, margin + 220, margin + 240];
 
-    y += 1;
+    sorted.forEach((r, idx) => {
+      if (checkPage(5)) drawHeader();
+
+      if (idx % 2 === 0) {
+        doc.setFillColor(249, 250, 251);
+        doc.rect(margin, y - 3.2, contentW, 4.5, "F");
+      }
+
+      doc.setTextColor(31, 41, 55);
+      doc.text(String(idx + 1), colX[0] + 1, y);
+      doc.text(r.casualWorker.name.substring(0, 30), colX[1] + 1, y);
+      doc.text(r.date, colX[2] + 1, y);
+      doc.text(getPhaseLabel(r.farmPhaseId).substring(0, 18), colX[3] + 1, y);
+      doc.text(r.activity.substring(0, 25), colX[4] + 1, y);
+      doc.text(r.rateType === "daily" ? "Daily" : "Per kg", colX[5] + 1, y);
+      doc.text(r.rate.toLocaleString(), colX[6] + 1, y);
+      doc.text(String(r.units), colX[7] + 1, y);
+      if (r.adjustment > 0) {
+        doc.setTextColor(220, 38, 38);
+        doc.text(`-${r.adjustment.toLocaleString()}`, colX[8] + 1, y);
+        doc.setTextColor(31, 41, 55);
+      } else {
+        doc.text("—", colX[8] + 1, y);
+      }
+      doc.setFont("helvetica", "bold");
+      doc.text(r.amount.toLocaleString(), colX[9] + 1, y);
+      doc.setFont("helvetica", "normal");
+      y += 4.5;
+    });
+
+    // Grand total
+    y += 2;
     checkPage(6);
-    doc.setFillColor(239, 246, 255);
+    doc.setFillColor(220, 252, 231); // green-100
     doc.rect(margin, y - 3.5, contentW, 5.5, "F");
     doc.setFont("helvetica", "bold");
-    doc.text("GRAND TOTAL", cols[0] + 1, y);
-    doc.text(payrollGrandTotal.toLocaleString() + " RWF", cols[5] + 1, y);
+    doc.setFontSize(7);
+    doc.setTextColor(22, 101, 52); // green-800
+    doc.text("GRAND TOTAL", colX[0] + 1, y);
+    doc.text(`${weekRecords.length} entries`, colX[4] + 1, y);
+    doc.text(payrollGrandTotal.toLocaleString() + " RWF", colX[9] + 1, y);
 
     doc.save(`Payroll-${selectedFarm}-W${selectedWeek}-${selectedYear}.pdf`);
   };
@@ -189,7 +237,7 @@ export default function LabourPayrollSummary({
                 <td className="py-2 px-3 text-right font-semibold">{row.totalPay.toLocaleString()}</td>
               </tr>
             ))}
-            <tr className="bg-purple-50 font-bold">
+            <tr className="bg-green-50 font-bold">
               <td className="py-2.5 px-3">GRAND TOTAL</td>
               <td className="py-2.5 px-3 text-center">
                 {payrollSummary.reduce((sum, r) => sum + r.daysWorked, 0)}
@@ -205,7 +253,7 @@ export default function LabourPayrollSummary({
                   ? `-${payrollSummary.reduce((sum, r) => sum + r.adjustments, 0).toLocaleString()}`
                   : "—"}
               </td>
-              <td className="py-2.5 px-3 text-right text-purple-700">
+              <td className="py-2.5 px-3 text-right text-green-700">
                 {payrollGrandTotal.toLocaleString()}
               </td>
             </tr>

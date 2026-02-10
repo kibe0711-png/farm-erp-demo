@@ -113,7 +113,7 @@ export default function Sidebar({ activeSection, onSectionChange, collapsed, onT
           onClick={() => onSectionChange("labourMgmt")}
           className={`flex items-center gap-3 w-full px-4 py-2.5 mx-2 rounded-lg text-sm transition-colors ${
             activeSection === "labourMgmt"
-              ? "bg-purple-50 text-purple-700 font-medium"
+              ? "bg-green-50 text-green-700 font-medium"
               : "text-gray-600 hover:bg-gray-50"
           }`}
           style={{ width: "calc(100% - 16px)" }}

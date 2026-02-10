@@ -147,7 +147,7 @@ export default function LabourEntryForm({
         <div className="flex gap-3">
           <button
             onClick={() => { setBulkMode(!bulkMode); setSelectedCasuals([]); }}
-            className="text-xs text-purple-600 hover:text-purple-800 font-medium"
+            className="text-xs text-green-600 hover:text-green-800 font-medium"
           >
             {bulkMode ? "Switch to Single" : "Switch to Bulk"}
           </button>
@@ -170,7 +170,7 @@ export default function LabourEntryForm({
                 setCasualSearch(e.target.value);
                 setEntryForm((prev) => ({ ...prev, casualWorkerId: "" }));
               }}
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
             {filteredCasuals.length > 0 && !entryForm.casualWorkerId && (
               <div className="mt-1 max-h-40 overflow-y-auto border border-gray-200 rounded bg-white shadow-lg">
@@ -181,7 +181,7 @@ export default function LabourEntryForm({
                       setEntryForm((prev) => ({ ...prev, casualWorkerId: String(w.id) }));
                       setCasualSearch(w.name);
                     }}
-                    className="block w-full text-left px-3 py-1.5 text-sm hover:bg-purple-50"
+                    className="block w-full text-left px-3 py-1.5 text-sm hover:bg-green-50"
                   >
                     {w.name}
                   </button>
@@ -197,7 +197,7 @@ export default function LabourEntryForm({
           <select
             value={entryForm.farmPhaseId}
             onChange={(e) => setEntryForm((prev) => ({ ...prev, farmPhaseId: e.target.value }))}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
           >
             <option value="">Select phase...</option>
             {farmPhases.map((p) => (
@@ -214,7 +214,7 @@ export default function LabourEntryForm({
           <select
             value={entryForm.activity}
             onChange={(e) => handleActivityChange(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
           >
             <option value="">Select activity...</option>
             {activityRates.map((r) => (
@@ -232,7 +232,7 @@ export default function LabourEntryForm({
             type="number"
             value={entryForm.rate}
             onChange={(e) => setEntryForm((prev) => ({ ...prev, rate: e.target.value }))}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
           />
         </div>
 
@@ -246,7 +246,7 @@ export default function LabourEntryForm({
             step="0.5"
             value={entryForm.units}
             onChange={(e) => setEntryForm((prev) => ({ ...prev, units: e.target.value }))}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
           />
         </div>
 
@@ -257,7 +257,7 @@ export default function LabourEntryForm({
             type="number"
             value={entryForm.adjustment}
             onChange={(e) => setEntryForm((prev) => ({ ...prev, adjustment: e.target.value }))}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
           />
         </div>
 
@@ -276,7 +276,7 @@ export default function LabourEntryForm({
             type="text"
             value={entryForm.notes}
             onChange={(e) => setEntryForm((prev) => ({ ...prev, notes: e.target.value }))}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             placeholder="Optional"
           />
         </div>
@@ -293,11 +293,11 @@ export default function LabourEntryForm({
             placeholder="Search casuals..."
             value={casualSearch}
             onChange={(e) => setCasualSearch(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-green-500"
           />
           <div className="max-h-48 overflow-y-auto border border-gray-200 rounded p-2 space-y-1">
             {(casualSearch.length >= 2 ? filteredCasuals : casualWorkers.slice(0, 50)).map((w) => (
-              <label key={w.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-purple-50 px-2 py-1 rounded">
+              <label key={w.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-green-50 px-2 py-1 rounded">
                 <input
                   type="checkbox"
                   checked={selectedCasuals.includes(w.id)}
@@ -319,7 +319,7 @@ export default function LabourEntryForm({
       <button
         onClick={handleSave}
         disabled={saving}
-        className="bg-purple-600 text-white px-6 py-2 rounded text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
+        className="bg-green-600 text-white px-6 py-2 rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50"
       >
         {saving
           ? "Saving..."
