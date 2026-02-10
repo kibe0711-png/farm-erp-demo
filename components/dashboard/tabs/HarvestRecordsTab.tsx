@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import WeekSelector from "../WeekSelector";
 import { useDashboard } from "../DashboardContext";
 
@@ -9,6 +9,14 @@ interface PledgeEntry {
   weekStartDate: string;
   dayOfWeek: number;
   pledgeKg: string | number | null;
+}
+
+// Local date string helper (avoids UTC shift from toISOString)
+function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export default function HarvestRecordsTab() {
@@ -22,29 +30,61 @@ export default function HarvestRecordsTab() {
   } = useDashboard();
 
   const [selectedFarm, setSelectedFarm] = useState<string | null>(null);
+  const [selectedLogPhase, setSelectedLogPhase] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [pledges, setPledges] = useState<PledgeEntry[]>([]);
+  const [allPledges, setAllPledges] = useState<PledgeEntry[]>([]);
+
+  const weekStr = selectedMonday.toISOString().split("T")[0];
+
+  // Week date range
+  const weekEnd = useMemo(() => {
+    const d = new Date(selectedMonday);
+    d.setDate(d.getDate() + 6);
+    d.setHours(23, 59, 59, 999);
+    return d;
+  }, [selectedMonday]);
+
+  const weekEndStr = toLocalDateStr(weekEnd);
+
+  // Default form date: today if within selected week, otherwise Monday
+  const today = toLocalDateStr(new Date());
+  const defaultDate = (today >= weekStr && today <= weekEndStr) ? today : weekStr;
+
   const [logForm, setLogForm] = useState({
-    logDate: new Date().toISOString().split("T")[0],
+    logDate: defaultDate,
     grade1Kg: "",
     grade2Kg: "",
     notes: "",
   });
-  const [selectedLogPhase, setSelectedLogPhase] = useState<number | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [pledges, setPledges] = useState<PledgeEntry[]>([]);
+
+  // Reset form date when week changes
+  useEffect(() => {
+    const t = toLocalDateStr(new Date());
+    const newDefault = (t >= weekStr && t <= weekEndStr) ? t : weekStr;
+    setLogForm((prev) => ({ ...prev, logDate: newDefault }));
+  }, [weekStr, weekEndStr]);
+
+  // Today's day-of-week index (0=Mon..6=Sun) for WTD calculations
+  const todayDow = useMemo(() => (new Date().getDay() + 6) % 7, []);
 
   const farmPhases = selectedFarm
-    ? phases.filter((p) => p.farm === selectedFarm)
+    ? phases.filter((p) => p.farm === selectedFarm && !p.archived)
     : [];
 
   const farmPhaseIds = farmPhases.map((p) => p.id);
 
-  const farmHarvestLogs = harvestLogs.filter((log) =>
-    farmPhaseIds.includes(log.farmPhaseId)
+  // Filter harvest logs to selected farm + selected week
+  const farmHarvestLogs = useMemo(
+    () => harvestLogs.filter((log) => {
+      if (!farmPhaseIds.includes(log.farmPhaseId)) return false;
+      const d = new Date(log.logDate);
+      return d >= selectedMonday && d <= weekEnd;
+    }),
+    [harvestLogs, farmPhaseIds.join(","), selectedMonday, weekEnd]
   );
 
-  const weekStr = selectedMonday.toISOString().split("T")[0];
-
-  // Fetch pledges for this farm's phases
+  // Fetch pledges for this farm's phases (drill-in view)
   const fetchPledges = useCallback(async () => {
     if (farmPhaseIds.length === 0) {
       setPledges([]);
@@ -66,17 +106,39 @@ export default function HarvestRecordsTab() {
     fetchPledges();
   }, [fetchPledges]);
 
+  // Fetch pledges for ALL phases (farm cards view — WTD summaries)
+  const allPhaseIds = useMemo(() => phases.filter((p) => !p.archived).map((p) => p.id), [phases]);
+
+  const fetchAllPledges = useCallback(async () => {
+    if (allPhaseIds.length === 0) {
+      setAllPledges([]);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/harvest-schedule?farmPhaseIds=${allPhaseIds.join(",")}&weekStart=${weekStr}`
+      );
+      if (res.ok) {
+        setAllPledges(await res.json());
+      }
+    } catch (error) {
+      console.error("Failed to fetch all pledges:", error);
+    }
+  }, [allPhaseIds.join(","), weekStr]);
+
+  useEffect(() => {
+    if (!selectedFarm) fetchAllPledges();
+  }, [fetchAllPledges, selectedFarm]);
+
   // Helper to get pledge for a specific log date + phase
   const getPledgeForLog = (farmPhaseId: number, logDate: string): number => {
     const logDateObj = new Date(logDate);
-    // Calculate which week this log belongs to (find the Monday of that week)
     const dayOfWeek = logDateObj.getDay();
-    const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday = 6 days since Monday
+    const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
     const logMonday = new Date(logDateObj);
     logMonday.setDate(logDateObj.getDate() - daysSinceMonday);
     const logWeekStr = logMonday.toISOString().split("T")[0];
 
-    // dayOfWeek in pledge: 0 = Monday, 6 = Sunday
     const pledgeDayOfWeek = daysSinceMonday;
 
     const pledge = pledges.find(
@@ -97,7 +159,7 @@ export default function HarvestRecordsTab() {
     setSubmitting(true);
     try {
       await handleHarvestLogSubmit(logForm, phase);
-      setLogForm({ logDate: new Date().toISOString().split("T")[0], grade1Kg: "", grade2Kg: "", notes: "" });
+      setLogForm({ logDate: defaultDate, grade1Kg: "", grade2Kg: "", notes: "" });
       setSelectedLogPhase(null);
     } catch (error) {
       alert(error instanceof Error ? error.message : "Failed to save record");
@@ -106,6 +168,9 @@ export default function HarvestRecordsTab() {
     }
   };
 
+  // ==========================================
+  // RENDER: Farm Cards View with WTD Summaries
+  // ==========================================
   if (!selectedFarm) {
     return (
       <div className="space-y-6">
@@ -116,27 +181,106 @@ export default function HarvestRecordsTab() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {farmSummaries.map((farm) => (
-              <button
-                key={farm.farm}
-                onClick={() => setSelectedFarm(farm.farm)}
-                className="bg-white rounded-lg border border-gray-200 p-6 text-left hover:border-green-300 hover:shadow-md transition-all"
-              >
-                <h3 className="text-lg font-semibold text-gray-900 mb-1">{farm.farm}</h3>
-                <p className="text-2xl font-bold text-green-600">
-                  {farm.totalAcreage.toFixed(2)} Ha
-                </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  {farm.phaseCount} phase{farm.phaseCount !== 1 ? "s" : ""}
-                </p>
-              </button>
-            ))}
+            {farmSummaries.map((farm) => {
+              // Compute WTD summaries per farm
+              const fp = phases.filter((p) => p.farm === farm.farm && !p.archived);
+              const fpIds = fp.map((p) => p.id);
+
+              // Pledged WTD: only days Mon through today (dayOfWeek <= todayDow)
+              const pledgedWtd = allPledges
+                .filter((p) => fpIds.includes(p.farmPhaseId) && p.dayOfWeek <= todayDow)
+                .reduce((sum, p) => sum + (Number(p.pledgeKg) || 0), 0);
+
+              // Harvested WTD: logs from Mon through today
+              const todayEnd = new Date();
+              todayEnd.setHours(23, 59, 59, 999);
+              const harvestedWtd = harvestLogs
+                .filter((log) => {
+                  if (!fpIds.includes(log.farmPhaseId)) return false;
+                  const d = new Date(log.logDate);
+                  return d >= selectedMonday && d <= todayEnd;
+                })
+                .reduce((sum, log) => sum + (Number(log.actualKg) || 0), 0);
+
+              const fulfillmentPct = pledgedWtd > 0
+                ? (harvestedWtd / pledgedWtd) * 100
+                : 0;
+
+              return (
+                <button
+                  key={farm.farm}
+                  onClick={() => setSelectedFarm(farm.farm)}
+                  className="bg-white rounded-xl border border-gray-200 p-6 text-left hover:border-green-300 hover:shadow-lg transition-all"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">{farm.farm}</h3>
+                      <p className="text-sm text-gray-500">
+                        {farm.phaseCount} phase{farm.phaseCount !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <p className="text-2xl font-bold text-green-600">
+                      {farm.totalAcreage.toFixed(2)} <span className="text-sm font-medium">Ha</span>
+                    </p>
+                  </div>
+
+                  {/* WTD Pledged vs Harvested */}
+                  <div className="grid grid-cols-2 gap-4 py-3 border-t border-gray-100">
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-blue-600">
+                        {pledgedWtd > 0 ? pledgedWtd.toLocaleString() : "0"}
+                      </p>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Pledged WTD (Kg)</p>
+                    </div>
+                    <div className="text-center">
+                      <p className={`text-xl font-bold ${
+                        harvestedWtd >= pledgedWtd && pledgedWtd > 0 ? "text-green-600" : "text-amber-600"
+                      }`}>
+                        {harvestedWtd > 0 ? harvestedWtd.toLocaleString() : "0"}
+                      </p>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Harvested WTD (Kg)</p>
+                    </div>
+                  </div>
+
+                  {/* Fulfillment progress bar */}
+                  {pledgedWtd > 0 ? (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-500">Fulfillment</span>
+                        <span className={`text-sm font-bold ${
+                          fulfillmentPct >= 100 ? "text-green-600"
+                            : fulfillmentPct >= 80 ? "text-yellow-600"
+                            : "text-red-600"
+                        }`}>
+                          {fulfillmentPct.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            fulfillmentPct >= 100 ? "bg-green-500"
+                              : fulfillmentPct >= 80 ? "bg-yellow-500"
+                              : "bg-red-500"
+                          }`}
+                          style={{ width: `${Math.min(100, fulfillmentPct)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : harvestedWtd > 0 ? (
+                    <p className="text-xs text-gray-400 mt-3">No pledges set for this week</p>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
     );
   }
 
+  // ==========================================
+  // RENDER: Farm Drill-in View (Weekly Records)
+  // ==========================================
   return (
     <div className="space-y-6">
       <WeekSelector />
@@ -179,6 +323,8 @@ export default function HarvestRecordsTab() {
                 <input
                   type="date"
                   value={logForm.logDate}
+                  min={weekStr}
+                  max={weekEndStr}
                   onChange={(e) => setLogForm({ ...logForm, logDate: e.target.value })}
                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   required
@@ -229,7 +375,7 @@ export default function HarvestRecordsTab() {
           </form>
         </div>
 
-        {farmHarvestLogs.length > 0 && (
+        {farmHarvestLogs.length > 0 ? (
           <div>
             <h3 className="text-sm font-medium text-gray-700 mb-2">Harvest Records</h3>
             <div className="overflow-x-auto border border-gray-200 rounded-lg">
@@ -343,6 +489,10 @@ export default function HarvestRecordsTab() {
                 </tfoot>
               </table>
             </div>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400">
+            No harvest records for this week.
           </div>
         )}
       </div>
