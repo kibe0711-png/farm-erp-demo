@@ -68,31 +68,36 @@ export default function HarvestRecordsTab() {
   // Today's day-of-week index (0=Mon..6=Sun) for WTD calculations
   const todayDow = useMemo(() => (new Date().getDay() + 6) % 7, []);
 
+  // Active phases for the recording dropdown
   const farmPhases = selectedFarm
     ? phases.filter((p) => p.farm === selectedFarm && !p.archived)
     : [];
 
-  const farmPhaseIds = farmPhases.map((p) => p.id);
+  // All phases (including archived) for logs, pledges, and WTD
+  const allFarmPhases = selectedFarm
+    ? phases.filter((p) => p.farm === selectedFarm)
+    : [];
+  const allFarmPhaseIds = allFarmPhases.map((p) => p.id);
 
-  // Filter harvest logs to selected farm + selected week
+  // Filter harvest logs to selected farm + selected week (includes archived phases)
   const farmHarvestLogs = useMemo(
     () => harvestLogs.filter((log) => {
-      if (!farmPhaseIds.includes(log.farmPhaseId)) return false;
+      if (!allFarmPhaseIds.includes(log.farmPhaseId)) return false;
       const d = new Date(log.logDate);
       return d >= selectedMonday && d <= weekEnd;
     }),
-    [harvestLogs, farmPhaseIds.join(","), selectedMonday, weekEnd]
+    [harvestLogs, allFarmPhaseIds.join(","), selectedMonday, weekEnd]
   );
 
-  // Fetch pledges for this farm's phases (drill-in view)
+  // Fetch pledges for this farm's phases including archived (drill-in view)
   const fetchPledges = useCallback(async () => {
-    if (farmPhaseIds.length === 0) {
+    if (allFarmPhaseIds.length === 0) {
       setPledges([]);
       return;
     }
     try {
       const res = await fetch(
-        `/api/harvest-schedule?farmPhaseIds=${farmPhaseIds.join(",")}&weekStart=${weekStr}`
+        `/api/harvest-schedule?farmPhaseIds=${allFarmPhaseIds.join(",")}&weekStart=${weekStr}`
       );
       if (res.ok) {
         setPledges(await res.json());
@@ -100,14 +105,14 @@ export default function HarvestRecordsTab() {
     } catch (error) {
       console.error("Failed to fetch pledges:", error);
     }
-  }, [farmPhaseIds.join(","), weekStr]);
+  }, [allFarmPhaseIds.join(","), weekStr]);
 
   useEffect(() => {
     fetchPledges();
   }, [fetchPledges]);
 
-  // Fetch pledges for ALL phases (farm cards view — WTD summaries)
-  const allPhaseIds = useMemo(() => phases.filter((p) => !p.archived).map((p) => p.id), [phases]);
+  // Fetch pledges for ALL phases including archived (farm cards view — WTD summaries)
+  const allPhaseIds = useMemo(() => phases.map((p) => p.id), [phases]);
 
   const fetchAllPledges = useCallback(async () => {
     if (allPhaseIds.length === 0) {
@@ -182,8 +187,8 @@ export default function HarvestRecordsTab() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {farmSummaries.map((farm) => {
-              // Compute WTD summaries per farm
-              const fp = phases.filter((p) => p.farm === farm.farm && !p.archived);
+              // Compute WTD summaries per farm (includes archived phases)
+              const fp = phases.filter((p) => p.farm === farm.farm);
               const fpIds = fp.map((p) => p.id);
 
               // Pledged WTD: only days Mon through today (dayOfWeek <= todayDow)
@@ -396,12 +401,15 @@ export default function HarvestRecordsTab() {
                 <tbody>
                   {farmHarvestLogs.map((log) => {
                     const phase = phases.find((p) => p.id === log.farmPhaseId);
+                    const isArchived = phase?.archived ?? false;
                     const g1 = Number(log.grade1Kg) || 0;
                     const g2 = Number(log.grade2Kg) || 0;
                     const total = Number(log.actualKg) || (g1 + g2);
                     const pledged = getPledgeForLog(log.farmPhaseId, log.logDate);
                     const variance = pledged > 0 ? ((total - pledged) / pledged) * 100 : 0;
-                    const varianceColor = pledged === 0
+                    const varianceColor = isArchived
+                      ? "text-gray-400"
+                      : pledged === 0
                       ? "text-gray-400"
                       : variance >= 0
                       ? "text-green-600"
@@ -410,9 +418,10 @@ export default function HarvestRecordsTab() {
                       : "text-red-600";
 
                     return (
-                      <tr key={log.id} className="border-t border-gray-100">
+                      <tr key={log.id} className={`border-t border-gray-100 ${isArchived ? "opacity-50" : ""}`}>
                         <td className="py-2 px-3">
                           {phase ? `${phase.cropCode} - ${phase.phaseId}` : `Phase ${log.farmPhaseId}`}
+                          {isArchived && <span className="ml-1 text-xs text-gray-400">(archived)</span>}
                         </td>
                         <td className="py-2 px-3">{new Date(log.logDate).toLocaleDateString("en-GB")}</td>
                         <td className="py-2 px-3 text-right font-medium text-blue-700">
