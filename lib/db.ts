@@ -6,7 +6,12 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+  const adapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL,
+    max: 5,                       // Limit pool size for Neon serverless
+    idleTimeoutMillis: 30_000,    // Close idle connections after 30s
+    connectionTimeoutMillis: 10_000, // Fail fast if connection takes >10s
+  });
   return new PrismaClient({ adapter });
 }
 

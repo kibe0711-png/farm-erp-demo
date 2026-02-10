@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
+import { fetchWithRetry } from "@/lib/fetchWithRetry";
 
 // ── Types ──────────────────────────────────────────────────────────
 export interface Phase {
@@ -344,7 +345,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const fetchPhases = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/phases");
+      const res = await fetchWithRetry("/api/phases");
       if (res.ok) {
         const allPhases = await res.json();
 
@@ -373,7 +374,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const fetchLaborSop = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/labor-sop");
+      const res = await fetchWithRetry("/api/labor-sop");
       if (res.ok) setLaborSop(await res.json());
     } catch (error) {
       console.error("Failed to fetch labor SOP:", error);
@@ -385,7 +386,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const fetchNutriSop = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/nutri-sop");
+      const res = await fetchWithRetry("/api/nutri-sop");
       if (res.ok) setNutriSop(await res.json());
     } catch (error) {
       console.error("Failed to fetch nutri SOP:", error);
@@ -396,7 +397,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   const fetchFeedingRecords = useCallback(async () => {
     try {
-      const res = await fetch("/api/feeding");
+      const res = await fetchWithRetry("/api/feeding");
       if (res.ok) setFeedingRecords(await res.json());
     } catch (error) {
       console.error("Failed to fetch feeding records:", error);
@@ -405,7 +406,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   const fetchHarvestLogs = useCallback(async () => {
     try {
-      const res = await fetch("/api/harvest-logs");
+      const res = await fetchWithRetry("/api/harvest-logs");
       if (res.ok) setHarvestLogs(await res.json());
     } catch (error) {
       console.error("Failed to fetch harvest logs:", error);
@@ -415,7 +416,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const fetchKeyInputs = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/key-inputs");
+      const res = await fetchWithRetry("/api/key-inputs");
       if (res.ok) setKeyInputs(await res.json());
     } catch (error) {
       console.error("Failed to fetch key inputs:", error);
@@ -426,7 +427,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   const fetchFarms = useCallback(async () => {
     try {
-      const res = await fetch("/api/farms");
+      const res = await fetchWithRetry("/api/farms");
       if (res.ok) setFarms(await res.json());
     } catch (error) {
       console.error("Failed to fetch farms:", error);
@@ -436,7 +437,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   // Fetch current user
   const fetchUser = useCallback(async () => {
     try {
-      const res = await fetch("/api/auth/me");
+      const res = await fetchWithRetry("/api/auth/me");
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
@@ -452,16 +453,20 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   }, [fetchUser]);
 
   // Fetch data after user is loaded (phases depend on user's farm access)
+  // Stagger into two batches to avoid overwhelming the DB connection pool
+  const dataFetchedRef = useRef(false);
   useEffect(() => {
-    if (user) {
-      fetchPhases();
-      fetchLaborSop();
+    if (!user || dataFetchedRef.current) return;
+    dataFetchedRef.current = true;
+
+    // Batch 1: Critical data needed for initial render
+    Promise.all([fetchPhases(), fetchFarms(), fetchLaborSop()]).then(() => {
+      // Batch 2: Secondary data after critical data loads
       fetchNutriSop();
       fetchKeyInputs();
       fetchFeedingRecords();
       fetchHarvestLogs();
-      fetchFarms();
-    }
+    });
   }, [user, fetchPhases, fetchLaborSop, fetchNutriSop, fetchKeyInputs, fetchFeedingRecords, fetchHarvestLogs, fetchFarms]);
 
   // ── Upload handlers (stable refs) ───────────────────────────────

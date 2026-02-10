@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { verifyToken } from "@/lib/jwt";
@@ -56,11 +55,9 @@ export function withAnalytics(
         }
       }
 
-      // Log performance data asynchronously (don't block response)
+      // Buffer analytics log (flushed in batch, doesn't hit DB per request)
       const responseTime = Date.now() - startTime;
-      logPerformance(endpoint, method, statusCode, responseTime, userId, errorMessage).catch(() => {
-        // Silently fail if logging fails
-      });
+      bufferLogEntry({ endpoint, method, statusCode, responseTime, userId, errorMessage });
 
       return response;
     } catch (error) {
@@ -69,9 +66,7 @@ export function withAnalytics(
       errorMessage = error instanceof Error ? error.message : "Unknown error";
 
       const responseTime = Date.now() - startTime;
-      logPerformance(endpoint, method, statusCode, responseTime, userId, errorMessage).catch(() => {
-        // Silently fail if logging fails
-      });
+      bufferLogEntry({ endpoint, method, statusCode, responseTime, userId, errorMessage });
 
       // Re-throw the error so Next.js can handle it
       throw error;
@@ -79,31 +74,46 @@ export function withAnalytics(
   };
 }
 
-/**
- * Logs API performance data to the database.
- * Runs asynchronously and does not block the API response.
- */
-async function logPerformance(
-  endpoint: string,
-  method: string,
-  statusCode: number,
-  responseTime: number,
-  userId: number | null,
-  errorMessage: string | null
-): Promise<void> {
-  try {
-    await prisma.apiPerformanceLog.create({
-      data: {
-        endpoint,
-        method,
-        statusCode,
-        responseTime,
-        userId,
-        errorMessage,
-      },
-    });
-  } catch (error) {
-    // Silently fail - don't let analytics break the app
-    console.error("Failed to log API performance:", error);
+// ── Batched analytics logging ────────────────────────────────────────
+// Buffer entries and flush every 5 seconds or when buffer reaches 20 entries,
+// using a single createMany call instead of one INSERT per request.
+
+interface LogEntry {
+  endpoint: string;
+  method: string;
+  statusCode: number;
+  responseTime: number;
+  userId: number | null;
+  errorMessage: string | null;
+}
+
+let logBuffer: LogEntry[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function bufferLogEntry(entry: LogEntry) {
+  logBuffer.push(entry);
+
+  if (logBuffer.length >= 20) {
+    flushLogs();
+  } else if (!flushTimer) {
+    flushTimer = setTimeout(flushLogs, 5_000);
   }
+}
+
+function flushLogs() {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+
+  const entries = logBuffer;
+  logBuffer = [];
+
+  if (entries.length === 0) return;
+
+  prisma.apiPerformanceLog
+    .createMany({ data: entries })
+    .catch((error) => {
+      console.error("Failed to flush analytics logs:", error);
+    });
 }
