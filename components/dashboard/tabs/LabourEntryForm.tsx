@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useAnalytics } from "../../analytics/AnalyticsProvider";
 
 interface CasualWorkerItem {
   id: number;
@@ -44,6 +45,7 @@ export default function LabourEntryForm({
   onSaved,
   onCancel,
 }: LabourEntryFormProps) {
+  const { trackAction } = useAnalytics();
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedCasuals, setSelectedCasuals] = useState<number[]>([]);
   const [casualSearch, setCasualSearch] = useState("");
@@ -129,6 +131,13 @@ export default function LabourEntryForm({
       if (result.errors && result.errors.length > 0) {
         alert(`Saved ${result.created} entries. ${result.errors.length} failed (likely duplicates).`);
       }
+
+      trackAction("data_entry", {
+        type: "attendance_record",
+        farm: selectedFarm,
+        activity: entryForm.activity,
+        count: casualIds.length,
+      });
 
       onSaved();
     } catch (error) {

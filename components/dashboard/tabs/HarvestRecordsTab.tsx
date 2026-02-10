@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import WeekSelector from "../WeekSelector";
 import { useDashboard } from "../DashboardContext";
+import { useAnalytics } from "../../analytics/AnalyticsProvider";
 
 interface PledgeEntry {
   farmPhaseId: number;
@@ -28,6 +29,7 @@ export default function HarvestRecordsTab() {
     handleDeleteHarvestLog,
     selectedMonday,
   } = useDashboard();
+  const { trackAction } = useAnalytics();
 
   const [selectedFarm, setSelectedFarm] = useState<string | null>(null);
   const [selectedLogPhase, setSelectedLogPhase] = useState<number | null>(null);
@@ -164,6 +166,12 @@ export default function HarvestRecordsTab() {
     setSubmitting(true);
     try {
       await handleHarvestLogSubmit(logForm, phase);
+      trackAction("data_entry", {
+        type: "harvest_record",
+        farm: phase.farm,
+        crop: phase.cropCode,
+        phase: phase.phaseId,
+      });
       setLogForm({ logDate: defaultDate, grade1Kg: "", grade2Kg: "", notes: "" });
       setSelectedLogPhase(null);
     } catch (error) {
@@ -442,7 +450,10 @@ export default function HarvestRecordsTab() {
                         <td className="py-2 px-3 text-gray-500">{log.notes || "-"}</td>
                         <td className="py-2 px-3">
                           <button
-                            onClick={() => handleDeleteHarvestLog(log.id)}
+                            onClick={() => {
+                              handleDeleteHarvestLog(log.id);
+                              trackAction("data_delete", { type: "harvest_record", id: log.id });
+                            }}
                             className="text-red-600 hover:text-red-700 text-sm"
                           >
                             Delete

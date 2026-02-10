@@ -6,6 +6,7 @@ import WeekSelector from "../WeekSelector";
 import { hasPermission, Permission } from "@/lib/auth/roles";
 import LabourEntryForm from "./LabourEntryForm";
 import LabourPayrollSummary from "./LabourPayrollSummary";
+import { useAnalytics } from "../../analytics/AnalyticsProvider";
 
 // Local date string helper (avoids UTC shift from toISOString)
 function toLocalDateStr(d: Date): string {
@@ -69,6 +70,7 @@ export default function LabourManagementTab() {
     user,
     handleAddPhase,
   } = useDashboard();
+  const { trackAction } = useAnalytics();
 
   const canEdit = !!user && hasPermission(user.role, Permission.ENTRY_LABOR);
 
@@ -235,6 +237,7 @@ export default function LabourManagementTab() {
     try {
       const res = await fetch(`/api/attendance?id=${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
+      trackAction("data_delete", { type: "attendance_record", id });
       fetchDayRecords();
       fetchWeekRecords();
     } catch {
