@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import CSVUploader from "@/components/CSVUploader";
-import { useDashboard, PHASE_HEADERS, getYears, getWeeks } from "../DashboardContext";
+import { useDashboard, PHASE_HEADERS, getYears, getWeeks, getMondayOfWeek } from "../DashboardContext";
 import { hasPermission, Permission } from "@/lib/auth/roles";
 
 function formatDate(value: string): string {
@@ -53,6 +53,25 @@ export default function PhasesTab() {
   );
 
   const canManage = user?.role ? hasPermission(user.role, Permission.MANAGE_CROPS) : false;
+
+  // Generate Monday week options for sowing date dropdown
+  const mondayOptions = useMemo(() => {
+    const options: { value: string; label: string }[] = [];
+    for (const year of getYears()) {
+      for (const week of getWeeks()) {
+        const monday = getMondayOfWeek(year, week);
+        const y = monday.getFullYear();
+        const m = String(monday.getMonth() + 1).padStart(2, "0");
+        const d = String(monday.getDate()).padStart(2, "0");
+        const dateStr = `${y}-${m}-${d}`;
+        options.push({
+          value: dateStr,
+          label: `W${week} ${year} — ${monday.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`,
+        });
+      }
+    }
+    return options;
+  }, []);
 
   // Build max SOP week per cropCode (union of labor + nutri SOPs)
   const maxSopWeekByCrop = useMemo(() => {
@@ -275,12 +294,16 @@ export default function PhasesTab() {
                       />
                     </td>
                     <td className="px-4 py-2">
-                      <input
-                        type="date"
+                      <select
                         value={addValues.sowingDate}
                         onChange={(e) => setAddValues({ ...addValues, sowingDate: e.target.value })}
                         className={inputClass}
-                      />
+                      >
+                        <option value="">Select week...</option>
+                        {mondayOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className="px-4 py-2">
                       <select
@@ -356,12 +379,16 @@ export default function PhasesTab() {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
                         {isEditing ? (
-                          <input
-                            type="date"
+                          <select
                             value={editValues.sowingDate}
                             onChange={(e) => setEditValues({ ...editValues, sowingDate: e.target.value })}
                             className={inputClass}
-                          />
+                          >
+                            <option value="">Select week...</option>
+                            {mondayOptions.map((opt) => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
                         ) : (
                           formatDate(phase.sowingDate)
                         )}
