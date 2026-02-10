@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { withAnalytics } from "@/lib/analytics/api-middleware";
+import { matchActivityToTask } from "@/lib/compliance/activityMatcher";
 
 // GET ?farmPhaseIds=1,2,3&weekStart=2026-01-26
 // Returns all scheduled tasks for the week with their compliance status
@@ -61,7 +62,7 @@ export const GET = withAnalytics(async (request: Request) => {
 
     // Fetch all data in parallel
     const weekEndDate = new Date(weekDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const [laborSchedules, nutriSchedules, harvestSchedules, laborLogs, feedingRecords, harvestLogs, laborSops, nutriSops, farmPhases] =
+    const [laborSchedules, nutriSchedules, harvestSchedules, laborLogs, attendanceRecords, feedingRecords, harvestLogs, laborSops, nutriSops, farmPhases] =
       await Promise.all([
         prisma.laborSchedule.findMany({
           where: { farmPhaseId: { in: farmPhaseIds }, weekStartDate: weekDate },
@@ -72,11 +73,20 @@ export const GET = withAnalytics(async (request: Request) => {
         prisma.harvestSchedule.findMany({
           where: { farmPhaseId: { in: farmPhaseIds }, weekStartDate: weekDate },
         }),
+        // Legacy labor logs (kept for backward compatibility during transition)
         prisma.laborLog.findMany({
           where: {
             farmPhaseId: { in: farmPhaseIds },
             logDate: { gte: weekDate, lt: weekEndDate },
           },
+        }),
+        // New attendance records (from Labour Management tab)
+        prisma.attendanceRecord.findMany({
+          where: {
+            farmPhaseId: { in: farmPhaseIds },
+            date: { gte: weekDate, lt: weekEndDate },
+          },
+          select: { farmPhaseId: true, activity: true, date: true },
         }),
         prisma.feedingRecord.findMany({
           where: {
@@ -103,12 +113,19 @@ export const GET = withAnalytics(async (request: Request) => {
     const nutriSopMap = new Map(nutriSops.map((s) => [s.id, s]));
     const phaseMap = new Map(farmPhases.map((p) => [p.id, p]));
 
-    // Build labor log lookup: farmPhaseId + task + dayOfWeek → true
+    // Build legacy labor log lookup: farmPhaseId + task + dayOfWeek → true
     const laborLogSet = new Set<string>();
     laborLogs.forEach((log) => {
       const logDate = new Date(log.logDate);
       const dayOfWeek = (logDate.getUTCDay() + 6) % 7; // Convert Sun=0 to Mon=0
       laborLogSet.add(`${log.farmPhaseId}-${log.task}-${dayOfWeek}`);
+    });
+
+    // Build attendance lookup: { farmPhaseId, activity, dayOfWeek } entries
+    const attendanceEntries = (attendanceRecords as { farmPhaseId: number; activity: string; date: Date }[]).map((rec) => {
+      const recDate = new Date(rec.date);
+      const dayOfWeek = (recDate.getUTCDay() + 6) % 7; // Convert Sun=0 to Mon=0
+      return { farmPhaseId: rec.farmPhaseId, activity: rec.activity, dayOfWeek };
     });
 
     // Build feeding log lookup: farmPhaseId + product + dayOfWeek → true
@@ -182,7 +199,13 @@ export const GET = withAnalytics(async (request: Request) => {
       const phase = phaseMap.get(sched.farmPhaseId);
       if (!sop || !phase) return;
 
-      const hasLog = laborLogSet.has(`${sched.farmPhaseId}-${sop.task}-${sched.dayOfWeek}`);
+      // Check both legacy labor logs and new attendance records
+      const hasLog = laborLogSet.has(`${sched.farmPhaseId}-${sop.task}-${sched.dayOfWeek}`)
+        || attendanceEntries.some(
+          (a) => a.farmPhaseId === sched.farmPhaseId
+            && a.dayOfWeek === sched.dayOfWeek
+            && matchActivityToTask(a.activity, sop.task)
+        );
 
       entries.push({
         type: "labor",
