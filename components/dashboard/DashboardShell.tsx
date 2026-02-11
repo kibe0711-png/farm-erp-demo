@@ -14,6 +14,7 @@ import FarmSettingsTab from "./tabs/FarmSettingsTab";
 import UsersManagement from "./tabs/UsersManagement";
 import AnalyticsView from "./tabs/AnalyticsView";
 import LabourManagementTab from "./tabs/LabourManagementTab";
+import InventoryTab from "./tabs/InventoryTab";
 
 export default function DashboardShell() {
   const [activeSection, setActiveSection] = useState<SidebarTab>("phases");
@@ -40,6 +41,7 @@ export default function DashboardShell() {
             {activeSection === "keyInputs" && <KeyInputsTab />}
             {activeSection === "operations" && <OperationsView />}
             {activeSection === "labourMgmt" && <LabourManagementTab />}
+            {activeSection === "inventory" && <InventoryTab />}
             {activeSection === "ipp" && <IPPView />}
             {activeSection === "settings" && <FarmSettingsTab />}
             {activeSection === "users" && <UsersManagement />}

@@ -58,6 +58,8 @@ export async function POST(request: Request) {
         const unitPriceRwf = parseFloat(String(getValue(row, ["unit_price_rwf", "unitPriceRwf", "Unit_Price_Rwf", "unit price rwf", "price"]) || "0").replace(/[^\d.]/g, "")) || 0;
         const cost = parseFloat(String(getValue(row, ["cost", "Cost", "COST", "total_cost"]) || "0").replace(/[^\d.]/g, "")) || 0;
 
+        const category = String(getValue(row, ["category", "Category", "CATEGORY"]) || "").trim() || undefined;
+
         return {
           cropCode,
           week: weekNum,
@@ -67,6 +69,7 @@ export async function POST(request: Request) {
           rateHa,
           unitPriceRwf,
           cost,
+          ...(category ? { category } : {}),
         };
       })
       .filter((record) => record.cropCode && record.products);
@@ -111,6 +114,7 @@ export async function PATCH(request: Request) {
     if (updates.rateHa !== undefined) updateData.rateHa = parseFloat(String(updates.rateHa)) || 0;
     if (updates.unitPriceRwf !== undefined) updateData.unitPriceRwf = parseFloat(String(updates.unitPriceRwf)) || 0;
     if (updates.cost !== undefined) updateData.cost = parseFloat(String(updates.cost)) || 0;
+    if (updates.category !== undefined) updateData.category = String(updates.category).trim() || null;
 
     const updated = await prisma.nutriSop.update({
       where: { id: parseInt(String(id), 10) },

@@ -17,6 +17,7 @@ model Farm {
   casualWorkers   CasualWorker[]
   activityRates   ActivityRate[]
   attendanceRecords AttendanceRecord[]
+  inventory       ProductInventory[]
 
   @@map("farms")
 }
@@ -59,8 +60,10 @@ model NutriSop {
   rateHa           Decimal  @map("rate_ha") @db.Decimal(10, 4)
   unitPriceRwf     Decimal  @map("unit_price_rwf") @db.Decimal(12, 2)
   cost             Decimal  @db.Decimal(12, 2)
+  category         String?  @db.Text
   createdAt        DateTime @default(now()) @map("created_at")
 
+  @@index([cropCode])
   @@map("nutri_sop")
 }
 
@@ -327,4 +330,38 @@ model AttendanceRecord {
   @@index([farmId, date])
   @@index([weekStartDate, farm])
   @@map("attendance_records")
+}
+
+model ProductInventory {
+  id           Int                    @id @default(autoincrement())
+  product      String                 @db.Text
+  category     String                 @db.Text
+  unit         String                 @db.VarChar(20)
+  farmId       Int                    @map("farm_id")
+  farm         Farm                   @relation(fields: [farmId], references: [id])
+  quantity     Decimal                @default(0) @db.Decimal(12, 4)
+  transactions InventoryTransaction[]
+  updatedAt    DateTime               @updatedAt @map("updated_at")
+  createdAt    DateTime               @default(now()) @map("created_at")
+
+  @@unique([product, farmId])
+  @@index([farmId])
+  @@index([category])
+  @@map("product_inventory")
+}
+
+model InventoryTransaction {
+  id                 Int              @id @default(autoincrement())
+  productInventoryId Int              @map("product_inventory_id")
+  productInventory   ProductInventory @relation(fields: [productInventoryId], references: [id])
+  type               String           @db.VarChar(3)
+  quantity           Decimal          @db.Decimal(12, 4)
+  date               DateTime         @db.Date
+  notes              String?          @db.Text
+  recordedBy         Int              @map("recorded_by")
+  createdAt          DateTime         @default(now()) @map("created_at")
+
+  @@index([productInventoryId, date])
+  @@index([date])
+  @@map("inventory_transactions")
 }

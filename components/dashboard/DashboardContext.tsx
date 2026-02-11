@@ -34,6 +34,7 @@ export interface NutriSopItem {
   rateHa: string | number;
   unitPriceRwf: string | number;
   cost: string | number;
+  category: string | null;
 }
 
 export interface FarmSummary {
