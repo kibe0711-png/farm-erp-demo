@@ -35,7 +35,7 @@ export const GET = withAnalytics(async (request: Request) => {
     const records = await prisma.attendanceRecord.findMany({
       where,
       include: {
-        casualWorker: { select: { name: true, nationalId: true } },
+        casualWorker: { select: { name: true, nationalId: true, phone: true } },
       },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     });

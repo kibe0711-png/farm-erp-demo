@@ -6,7 +6,7 @@ import jsPDF from "jspdf";
 interface AttendanceRecordItem {
   id: number;
   casualWorkerId: number;
-  casualWorker: { name: string; nationalId: string | null };
+  casualWorker: { name: string; nationalId: string | null; phone: string | null };
   date: string;
   farmPhaseId: number;
   activity: string;
@@ -20,6 +20,7 @@ interface AttendanceRecordItem {
 interface PayrollRow {
   casualWorkerId: number;
   name: string;
+  phone: string | null;
   daysWorked: number;
   dailyPay: number;
   perKgPay: number;
@@ -47,6 +48,7 @@ export default function LabourPayrollSummary({
   const payrollSummary: PayrollRow[] = useMemo(() => {
     const byCasual = new Map<number, {
       name: string;
+      phone: string | null;
       days: Set<string>;
       dailyPay: number;
       perKgPay: number;
@@ -56,6 +58,7 @@ export default function LabourPayrollSummary({
     weekRecords.forEach((r) => {
       const existing = byCasual.get(r.casualWorkerId) || {
         name: r.casualWorker.name,
+        phone: r.casualWorker.phone,
         days: new Set<string>(),
         dailyPay: 0,
         perKgPay: 0,
@@ -75,6 +78,7 @@ export default function LabourPayrollSummary({
       .map(([id, data]) => ({
         casualWorkerId: id,
         name: data.name,
+        phone: data.phone,
         daysWorked: data.days.size,
         dailyPay: data.dailyPay,
         perKgPay: data.perKgPay,
@@ -137,8 +141,8 @@ export default function LabourPayrollSummary({
       doc.setFont("helvetica", "bold");
       doc.setTextColor(55, 65, 81);
 
-      const headers = ["#", "Name", "Date", "Phase", "Activity", "Type", "Rate", "Units", "Adj.", "Amount"];
-      const colX = [margin, margin + 8, margin + 58, margin + 80, margin + 110, margin + 155, margin + 175, margin + 200, margin + 220, margin + 240];
+      const headers = ["#", "Name", "Phone", "Date", "Phase", "Activity", "Type", "Rate", "Units", "Adj.", "Amount"];
+      const colX = [margin, margin + 8, margin + 50, margin + 75, margin + 95, margin + 120, margin + 158, margin + 178, margin + 200, margin + 220, margin + 242];
       headers.forEach((h, i) => doc.text(h, colX[i] + 1, y));
       y += 5;
     };
@@ -150,7 +154,7 @@ export default function LabourPayrollSummary({
     doc.setFontSize(6.5);
     doc.setTextColor(31, 41, 55);
 
-    const colX = [margin, margin + 8, margin + 58, margin + 80, margin + 110, margin + 155, margin + 175, margin + 200, margin + 220, margin + 240];
+    const colX = [margin, margin + 8, margin + 50, margin + 75, margin + 95, margin + 120, margin + 158, margin + 178, margin + 200, margin + 220, margin + 242];
 
     sorted.forEach((r, idx) => {
       if (checkPage(5)) drawHeader();
@@ -162,22 +166,23 @@ export default function LabourPayrollSummary({
 
       doc.setTextColor(31, 41, 55);
       doc.text(String(idx + 1), colX[0] + 1, y);
-      doc.text(r.casualWorker.name.substring(0, 30), colX[1] + 1, y);
-      doc.text(r.date, colX[2] + 1, y);
-      doc.text(getPhaseLabel(r.farmPhaseId).substring(0, 18), colX[3] + 1, y);
-      doc.text(r.activity.substring(0, 25), colX[4] + 1, y);
-      doc.text(r.rateType === "daily" ? "Daily" : "Per kg", colX[5] + 1, y);
-      doc.text(r.rate.toLocaleString(), colX[6] + 1, y);
-      doc.text(String(r.units), colX[7] + 1, y);
+      doc.text(r.casualWorker.name.substring(0, 25), colX[1] + 1, y);
+      doc.text(r.casualWorker.phone || "—", colX[2] + 1, y);
+      doc.text(r.date, colX[3] + 1, y);
+      doc.text(getPhaseLabel(r.farmPhaseId).substring(0, 15), colX[4] + 1, y);
+      doc.text(r.activity.substring(0, 22), colX[5] + 1, y);
+      doc.text(r.rateType === "daily" ? "Daily" : "Per kg", colX[6] + 1, y);
+      doc.text(r.rate.toLocaleString(), colX[7] + 1, y);
+      doc.text(String(r.units), colX[8] + 1, y);
       if (r.adjustment > 0) {
         doc.setTextColor(220, 38, 38);
-        doc.text(`-${r.adjustment.toLocaleString()}`, colX[8] + 1, y);
+        doc.text(`-${r.adjustment.toLocaleString()}`, colX[9] + 1, y);
         doc.setTextColor(31, 41, 55);
       } else {
-        doc.text("—", colX[8] + 1, y);
+        doc.text("—", colX[9] + 1, y);
       }
       doc.setFont("helvetica", "bold");
-      doc.text(r.amount.toLocaleString(), colX[9] + 1, y);
+      doc.text(r.amount.toLocaleString(), colX[10] + 1, y);
       doc.setFont("helvetica", "normal");
       y += 4.5;
     });
@@ -191,8 +196,8 @@ export default function LabourPayrollSummary({
     doc.setFontSize(7);
     doc.setTextColor(22, 101, 52); // green-800
     doc.text("GRAND TOTAL", colX[0] + 1, y);
-    doc.text(`${weekRecords.length} entries`, colX[4] + 1, y);
-    doc.text(payrollGrandTotal.toLocaleString() + " RWF", colX[9] + 1, y);
+    doc.text(`${weekRecords.length} entries`, colX[5] + 1, y);
+    doc.text(payrollGrandTotal.toLocaleString() + " RWF", colX[10] + 1, y);
 
     doc.save(`Payroll-${selectedFarm}-W${selectedWeek}-${selectedYear}.pdf`);
   };
@@ -217,6 +222,7 @@ export default function LabourPayrollSummary({
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="text-left py-2.5 px-3 font-medium text-gray-600">Name</th>
+              <th className="text-left py-2.5 px-3 font-medium text-gray-600">Phone</th>
               <th className="text-center py-2.5 px-3 font-medium text-gray-600">Days</th>
               <th className="text-right py-2.5 px-3 font-medium text-gray-600">Daily Pay</th>
               <th className="text-right py-2.5 px-3 font-medium text-gray-600">Per-kg Pay</th>
@@ -228,6 +234,7 @@ export default function LabourPayrollSummary({
             {payrollSummary.map((row) => (
               <tr key={row.casualWorkerId} className="border-b border-gray-100">
                 <td className="py-2 px-3 font-medium">{row.name}</td>
+                <td className="py-2 px-3 text-gray-500 text-sm">{row.phone || "—"}</td>
                 <td className="py-2 px-3 text-center">{row.daysWorked}</td>
                 <td className="py-2 px-3 text-right">{row.dailyPay.toLocaleString()}</td>
                 <td className="py-2 px-3 text-right">{row.perKgPay.toLocaleString()}</td>
@@ -239,6 +246,7 @@ export default function LabourPayrollSummary({
             ))}
             <tr className="bg-green-50 font-bold">
               <td className="py-2.5 px-3">GRAND TOTAL</td>
+              <td className="py-2.5 px-3"></td>
               <td className="py-2.5 px-3 text-center">
                 {payrollSummary.reduce((sum, r) => sum + r.daysWorked, 0)}
               </td>

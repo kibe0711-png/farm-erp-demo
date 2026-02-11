@@ -37,7 +37,7 @@ interface ActivityRateItem {
 interface AttendanceRecordItem {
   id: number;
   casualWorkerId: number;
-  casualWorker: { name: string; nationalId: string | null };
+  casualWorker: { name: string; nationalId: string | null; phone: string | null };
   date: string;
   weekStartDate: string;
   farmPhaseId: number;
