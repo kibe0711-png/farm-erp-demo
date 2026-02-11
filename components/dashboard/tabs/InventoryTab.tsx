@@ -75,15 +75,6 @@ export default function InventoryTab() {
             <span className="text-sm text-gray-500">{farmName}</span>
           )}
         </div>
-        {inv.canEdit && (
-          <button
-            onClick={inv.syncProducts}
-            disabled={inv.syncing}
-            className="text-sm text-amber-600 border border-amber-300 px-3 py-1.5 rounded hover:bg-amber-50 disabled:opacity-50"
-          >
-            {inv.syncing ? "Syncing..." : "Sync NutriSop Products"}
-          </button>
-        )}
       </div>
 
       {/* Pending queue */}

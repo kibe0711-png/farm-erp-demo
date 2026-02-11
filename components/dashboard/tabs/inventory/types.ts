@@ -3,6 +3,8 @@ export interface ProductInventoryItem {
   product: string;
   category: string;
   unit: string;
+  variety: string | null;
+  cropCode: string | null;
   farmId: number;
   quantity: number;
   farm?: { name: string };
@@ -38,6 +40,16 @@ export interface IssuanceFormState {
   quantity: string;
   date: string;
   notes: string;
+}
+
+export interface UsagePhaseEntry {
+  phaseName: string;
+  qty: number;
+}
+
+export interface UsageEntry {
+  total: number;
+  phases: UsagePhaseEntry[];
 }
 
 export function guessUnit(category: string | null): string {

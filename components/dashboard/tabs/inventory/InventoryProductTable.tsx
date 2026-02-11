@@ -5,6 +5,7 @@ import type {
   ProductInventoryItem,
   InventoryTransactionItem,
   IssuanceFormState,
+  UsageEntry,
 } from "./types";
 import ExpandedProductRow from "./ExpandedProductRow";
 
@@ -17,7 +18,7 @@ interface InventoryProductTableProps {
   transactions: InventoryTransactionItem[];
   nutriSopProductNames: Set<string>;
   totalUsageByProduct: Map<string, number>;
-  usageByProduct: Map<string, Map<string, number>>;
+  usageByProduct: Map<string, Map<string, UsageEntry>>;
   canEdit: boolean;
   canDelete: boolean;
   issuanceForm: IssuanceFormState;
@@ -55,11 +56,15 @@ export default function InventoryProductTable({
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
         {!hasInventory
-          ? "No products in inventory. Click 'Sync NutriSop Products' to get started."
+          ? "No products in inventory. Run the seed script to populate products."
           : "No products match your filter."}
       </div>
     );
   }
+
+  // Show seed-specific columns when any visible item has a cropCode
+  const hasSeedItems = items.some((i) => i.cropCode);
+  const colCount = hasSeedItems ? 7 : 7;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -67,11 +72,22 @@ export default function InventoryProductTable({
         <thead>
           <tr className="border-b border-gray-200 bg-gray-50">
             <th className="text-left py-2.5 px-3 font-medium text-gray-600">Product</th>
-            <th className="text-left py-2.5 px-3 font-medium text-gray-600">Category</th>
+            {hasSeedItems ? (
+              <>
+                <th className="text-left py-2.5 px-3 font-medium text-gray-600">Crop</th>
+                <th className="text-left py-2.5 px-3 font-medium text-gray-600">Variety</th>
+              </>
+            ) : (
+              <th className="text-left py-2.5 px-3 font-medium text-gray-600">Category</th>
+            )}
             <th className="text-left py-2.5 px-3 font-medium text-gray-600">Unit</th>
             <th className="text-right py-2.5 px-3 font-medium text-gray-600">Stock</th>
-            <th className="text-center py-2.5 px-3 font-medium text-gray-600">SOP</th>
-            <th className="text-right py-2.5 px-3 font-medium text-gray-600">Usage</th>
+            {!hasSeedItems && (
+              <>
+                <th className="text-center py-2.5 px-3 font-medium text-gray-600">SOP</th>
+                <th className="text-right py-2.5 px-3 font-medium text-gray-600">Usage</th>
+              </>
+            )}
             <th className="text-center py-2.5 px-3 font-medium text-gray-600 w-20">Actions</th>
           </tr>
         </thead>
@@ -92,11 +108,28 @@ export default function InventoryProductTable({
                   <td className="py-2 px-3 font-medium text-gray-900">
                     {item.product}
                   </td>
-                  <td className="py-2 px-3">
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                      {item.category}
-                    </span>
-                  </td>
+                  {hasSeedItems ? (
+                    <>
+                      <td className="py-2 px-3">
+                        {item.cropCode ? (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                            {item.cropCode}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-gray-600">
+                        {item.variety || "-"}
+                      </td>
+                    </>
+                  ) : (
+                    <td className="py-2 px-3">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        {item.category}
+                      </span>
+                    </td>
+                  )}
                   <td className="py-2 px-3 text-gray-500">{item.unit}</td>
                   <td
                     className={`py-2 px-3 text-right font-semibold ${
@@ -105,26 +138,30 @@ export default function InventoryProductTable({
                   >
                     {item.quantity.toFixed(2)}
                   </td>
-                  <td className="py-2 px-3 text-center">
-                    {isNutriProduct ? (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700">
-                        Yes
-                      </span>
-                    ) : (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-400">
-                        No
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    {isNutriProduct && totalUsage > 0 ? (
-                      <span className="text-blue-600 font-medium">
-                        {totalUsage.toFixed(2)}
-                      </span>
-                    ) : (
-                      <span className="text-gray-300">-</span>
-                    )}
-                  </td>
+                  {!hasSeedItems && (
+                    <>
+                      <td className="py-2 px-3 text-center">
+                        {isNutriProduct ? (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700">
+                            Yes
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-400">
+                            No
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        {isNutriProduct && totalUsage > 0 ? (
+                          <span className="text-blue-600 font-medium">
+                            {totalUsage.toFixed(2)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
+                      </td>
+                    </>
+                  )}
                   <td className="py-2 px-3 text-center">
                     <span className="text-amber-600 text-xs font-medium">
                       {isExpanded ? "Close" : "Details"}
@@ -135,7 +172,7 @@ export default function InventoryProductTable({
                 {isExpanded && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={colCount}
                       className="bg-amber-50/50 p-4 border-b border-amber-200"
                     >
                       <ExpandedProductRow

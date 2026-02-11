@@ -337,6 +337,8 @@ model ProductInventory {
   product      String                 @db.Text
   category     String                 @db.Text
   unit         String                 @db.VarChar(20)
+  variety      String?                @db.VarChar(100)
+  cropCode     String?                @map("crop_code") @db.VarChar(50)
   farmId       Int                    @map("farm_id")
   farm         Farm                   @relation(fields: [farmId], references: [id])
   quantity     Decimal                @default(0) @db.Decimal(12, 4)

@@ -1,11 +1,11 @@
 "use client";
 
-import type { InventoryTransactionItem, IssuanceFormState } from "./types";
+import type { InventoryTransactionItem, IssuanceFormState, UsageEntry } from "./types";
 
 interface ExpandedProductRowProps {
   item: { id: number; product: string; unit: string };
   transactions: InventoryTransactionItem[];
-  usageByProduct: Map<string, Map<string, number>>;
+  usageByProduct: Map<string, Map<string, UsageEntry>>;
   nutriSopProductNames: Set<string>;
   canEdit: boolean;
   canDelete: boolean;
@@ -250,10 +250,13 @@ export default function ExpandedProductRow({
                       <th className="text-right py-1.5 px-2 font-medium text-gray-600">
                         Qty Applied
                       </th>
+                      <th className="text-left py-1.5 px-2 font-medium text-gray-600">
+                        Phase(s)
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {entries.map(([date, qty]) => (
+                    {entries.map(([date, entry]) => (
                       <tr key={date} className="border-b border-gray-100">
                         <td className="py-1.5 px-2">
                           {new Date(date).toLocaleDateString("en-GB", {
@@ -263,7 +266,20 @@ export default function ExpandedProductRow({
                           })}
                         </td>
                         <td className="py-1.5 px-2 text-right text-blue-600 font-medium">
-                          {qty.toFixed(2)}
+                          {entry.total.toFixed(2)}
+                        </td>
+                        <td className="py-1.5 px-2">
+                          <div className="flex flex-wrap gap-1">
+                            {entry.phases.map((p) => (
+                              <span
+                                key={p.phaseName}
+                                className="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-700"
+                                title={`${p.qty.toFixed(2)} applied to ${p.phaseName}`}
+                              >
+                                {p.phaseName} ({p.qty.toFixed(2)})
+                              </span>
+                            ))}
+                          </div>
                         </td>
                       </tr>
                     ))}

@@ -13,19 +13,27 @@ const prisma = new PrismaClient({ adapter });
 
 // Non-SOP products from CSV files in /Downloads/Inventory upload/
 // Feeding CSVs are ignored — NutriSop products come from DB
-const NON_SOP_PRODUCTS: { product: string; category: string; unit: string }[] = [
-  // seeds.csv
-  { product: "Fine beans - Twiga", category: "Seeds", unit: "Kg" },
-  { product: "Fine beans - Star 2054", category: "Seeds", unit: "Kg" },
-  { product: "Fine beans - Vanilla", category: "Seeds", unit: "Kg" },
-  { product: "Fine beans - Boston", category: "Seeds", unit: "Kg" },
-  { product: "Fine beans - Lavezzi", category: "Seeds", unit: "kg" },
-  { product: "Fine beans - Catalina", category: "Seeds", unit: "kg" },
-  { product: "Peas", category: "Seeds", unit: "kg" },
-  { product: "Red chilli - Red thunder F1", category: "Seeds", unit: "g" },
-  { product: "Green chilli - Bandai F1", category: "Seeds", unit: "kg" },
-  { product: "Baby corn - SG18", category: "Seeds", unit: "g" },
-  { product: "Broccoli - Inspiration F1", category: "Seeds", unit: "g" },
+interface ProductDef {
+  product: string;
+  category: string;
+  unit: string;
+  variety?: string;
+  cropCode?: string;
+}
+
+const NON_SOP_PRODUCTS: ProductDef[] = [
+  // seeds.csv — with variety + cropCode
+  { product: "Fine beans - Twiga", category: "Seeds", unit: "Kg", variety: "Twiga", cropCode: "Fine beans" },
+  { product: "Fine beans - Star 2054", category: "Seeds", unit: "Kg", variety: "Star 2054", cropCode: "Fine beans" },
+  { product: "Fine beans - Vanilla", category: "Seeds", unit: "Kg", variety: "Vanilla", cropCode: "Fine beans" },
+  { product: "Fine beans - Boston", category: "Seeds", unit: "Kg", variety: "Boston", cropCode: "Fine beans" },
+  { product: "Fine beans - Lavezzi", category: "Seeds", unit: "Kg", variety: "Lavezzi", cropCode: "Fine beans" },
+  { product: "Fine beans - Catalina", category: "Seeds", unit: "Kg", variety: "Catalina", cropCode: "Fine beans" },
+  { product: "Peas", category: "Seeds", unit: "Kg", cropCode: "Peas" },
+  { product: "Red chilli - Red thunder F1", category: "Seeds", unit: "g", variety: "Red thunder F1", cropCode: "Red chilli" },
+  { product: "Green chilli - Bandai F1", category: "Seeds", unit: "Kg", variety: "Bandai F1", cropCode: "Green chilli" },
+  { product: "Baby corn - SG18", category: "Seeds", unit: "g", variety: "SG18", cropCode: "Baby corn" },
+  { product: "Broccoli - Inspiration F1", category: "Seeds", unit: "g", variety: "Inspiration F1", cropCode: "Broccoli" },
 
   // Fuel.csv
   { product: "Petrol (Essance)", category: "Fuel", unit: "L" },
@@ -112,7 +120,7 @@ async function main() {
   console.log(`NutriSop products: ${sopProducts.length}`);
 
   // Build full product list
-  const allProducts: { product: string; category: string; unit: string }[] = [];
+  const allProducts: ProductDef[] = [];
 
   // Add NutriSop products
   for (const sop of sopProducts) {
@@ -147,12 +155,16 @@ async function main() {
             },
           },
           update: {
-            // Don't overwrite existing category/unit — only create if missing
+            // Backfill variety/cropCode on existing records
+            ...(item.variety !== undefined ? { variety: item.variety } : {}),
+            ...(item.cropCode !== undefined ? { cropCode: item.cropCode } : {}),
           },
           create: {
             product: item.product,
             category: item.category,
             unit: item.unit,
+            variety: item.variety ?? null,
+            cropCode: item.cropCode ?? null,
             farmId: farm.id,
             quantity: 0,
           },

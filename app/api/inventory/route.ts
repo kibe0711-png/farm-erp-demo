@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
     const results = [];
     for (const item of items) {
-      const { product, category, unit, farmId, quantity } = item;
+      const { product, category, unit, farmId, quantity, variety, cropCode } = item;
 
       if (!product || !category || !unit || !farmId) {
         continue;
@@ -57,11 +57,15 @@ export async function POST(request: Request) {
           category: String(category).trim(),
           unit: String(unit).trim(),
           quantity: parseFloat(String(quantity ?? 0)) || 0,
+          ...(variety !== undefined ? { variety: variety ? String(variety).trim() : null } : {}),
+          ...(cropCode !== undefined ? { cropCode: cropCode ? String(cropCode).trim() : null } : {}),
         },
         create: {
           product: String(product).trim(),
           category: String(category).trim(),
           unit: String(unit).trim(),
+          variety: variety ? String(variety).trim() : null,
+          cropCode: cropCode ? String(cropCode).trim() : null,
           farmId: parseInt(String(farmId), 10),
           quantity: parseFloat(String(quantity ?? 0)) || 0,
         },
@@ -96,6 +100,8 @@ export async function PATCH(request: Request) {
     if (updates.category !== undefined) updateData.category = String(updates.category).trim();
     if (updates.unit !== undefined) updateData.unit = String(updates.unit).trim();
     if (updates.quantity !== undefined) updateData.quantity = parseFloat(String(updates.quantity)) || 0;
+    if (updates.variety !== undefined) updateData.variety = updates.variety ? String(updates.variety).trim() : null;
+    if (updates.cropCode !== undefined) updateData.cropCode = updates.cropCode ? String(updates.cropCode).trim() : null;
 
     const updated = await prisma.productInventory.update({
       where: { id: parseInt(String(id), 10) },

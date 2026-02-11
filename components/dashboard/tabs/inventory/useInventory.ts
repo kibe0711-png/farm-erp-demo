@@ -8,8 +8,8 @@ import type {
   InventoryTransactionItem,
   PendingIssuance,
   IssuanceFormState,
+  UsageEntry,
 } from "./types";
-import { guessUnit } from "./types";
 
 export function useInventory() {
   const { farms, user, nutriSop, feedingRecords, phases } = useDashboard();
@@ -47,8 +47,6 @@ export function useInventory() {
     notes: "",
   });
 
-  // Sync state
-  const [syncing, setSyncing] = useState(false);
 
   // Auto-select farm for non-admin users
   useEffect(() => {
@@ -109,27 +107,40 @@ export function useInventory() {
     [nutriSop]
   );
 
-  // Usage from feeding records for this farm
+  // Usage from feeding records for this farm — with phase breakdown
   const usageByProduct = useMemo(() => {
-    if (!selectedFarmId) return new Map<string, Map<string, number>>();
+    if (!selectedFarmId) return new Map<string, Map<string, UsageEntry>>();
 
     const farm = farms.find((f) => f.id === selectedFarmId);
-    if (!farm) return new Map<string, Map<string, number>>();
+    if (!farm) return new Map<string, Map<string, UsageEntry>>();
 
-    const farmPhaseIds = new Set(
-      phases.filter((p) => p.farm === farm.name).map((p) => p.id)
-    );
+    const farmPhases = phases.filter((p) => p.farm === farm.name);
+    const farmPhaseIds = new Set(farmPhases.map((p) => p.id));
+    const phaseNameMap = new Map(farmPhases.map((p) => [p.id, p.phaseId]));
 
-    const map = new Map<string, Map<string, number>>();
+    const map = new Map<string, Map<string, UsageEntry>>();
     for (const record of feedingRecords) {
       if (!farmPhaseIds.has(record.farmPhaseId)) continue;
       const product = record.product;
       const dateStr = new Date(record.applicationDate).toISOString().split("T")[0];
       const qty = parseFloat(String(record.actualQty)) || 0;
+      const phaseName = phaseNameMap.get(record.farmPhaseId) || `Phase #${record.farmPhaseId}`;
 
       if (!map.has(product)) map.set(product, new Map());
       const dateMap = map.get(product)!;
-      dateMap.set(dateStr, (dateMap.get(dateStr) || 0) + qty);
+
+      if (!dateMap.has(dateStr)) {
+        dateMap.set(dateStr, { total: 0, phases: [] });
+      }
+      const entry = dateMap.get(dateStr)!;
+      entry.total += qty;
+
+      const existing = entry.phases.find((p) => p.phaseName === phaseName);
+      if (existing) {
+        existing.qty += qty;
+      } else {
+        entry.phases.push({ phaseName, qty });
+      }
     }
     return map;
   }, [feedingRecords, phases, farms, selectedFarmId]);
@@ -138,7 +149,7 @@ export function useInventory() {
     const totals = new Map<string, number>();
     for (const [product, dateMap] of usageByProduct) {
       let total = 0;
-      for (const qty of dateMap.values()) total += qty;
+      for (const entry of dateMap.values()) total += entry.total;
       totals.set(product, total);
     }
     return totals;
@@ -236,43 +247,6 @@ export function useInventory() {
     }
   };
 
-  // Sync NutriSop products
-  const syncProducts = async () => {
-    if (!selectedFarmId) return;
-    setSyncing(true);
-    try {
-      const productMap = new Map<string, { category: string; unit: string }>();
-      for (const sop of nutriSop) {
-        if (!productMap.has(sop.products)) {
-          productMap.set(sop.products, {
-            category: sop.category || "Farm Input",
-            unit: guessUnit(sop.category),
-          });
-        }
-      }
-
-      const items = Array.from(productMap.entries()).map(([product, info]) => ({
-        product,
-        category: info.category,
-        unit: info.unit,
-        farmId: selectedFarmId,
-        quantity: 0,
-      }));
-
-      const res = await fetch("/api/inventory", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(items),
-      });
-      if (!res.ok) throw new Error("Failed to sync products");
-      fetchInventory();
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Failed to sync");
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   // Farm change handler
   const changeFarm = (farmId: number) => {
     setSelectedFarmId(farmId);
@@ -322,10 +296,6 @@ export function useInventory() {
     // Issuance form
     issuanceForm,
     setIssuanceForm,
-
-    // Sync
-    syncing,
-    syncProducts,
 
     // Usage
     nutriSopProductNames,
