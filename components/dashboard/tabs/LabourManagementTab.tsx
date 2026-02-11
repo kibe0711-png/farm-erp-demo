@@ -86,6 +86,9 @@ export default function LabourManagementTab() {
   const [farmWeeklySummaries, setFarmWeeklySummaries] = useState<Map<string, FarmWeeklySummary>>(new Map());
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showAddCasual, setShowAddCasual] = useState(false);
+  const [casualForm, setCasualForm] = useState({ name: "", nationalId: "", phone: "" });
+  const [savingCasual, setSavingCasual] = useState(false);
 
   const weekStr = toLocalDateStr(selectedMonday);
 
@@ -251,6 +254,36 @@ export default function LabourManagementTab() {
     fetchWeekRecords();
   };
 
+  const handleAddCasual = async () => {
+    if (!casualForm.name.trim() || !selectedFarm) return;
+    setSavingCasual(true);
+    try {
+      const res = await fetch("/api/casual-workers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: casualForm.name.trim(),
+          nationalId: casualForm.nationalId.trim() || null,
+          phone: casualForm.phone.trim() || null,
+          farm: selectedFarm,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to add worker");
+
+      trackAction("data_entry", { type: "casual_worker", farm: selectedFarm });
+      setCasualForm({ name: "", nationalId: "", phone: "" });
+      setShowAddCasual(false);
+      // Refresh casual workers list
+      const workersRes = await fetch(`/api/casual-workers?farm=${encodeURIComponent(selectedFarm)}`);
+      if (workersRes.ok) setCasualWorkers(await workersRes.json());
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to add casual worker");
+    } finally {
+      setSavingCasual(false);
+    }
+  };
+
   // --- Day summary stats ---
   const daySummary = useMemo(() => {
     const total = dayRecords.reduce((sum, r) => sum + r.amount, 0);
@@ -364,14 +397,70 @@ export default function LabourManagementTab() {
           &middot; Total: <span className="font-semibold text-green-600">{daySummary.total.toLocaleString()} RWF</span>
         </p>
         {canEdit && (
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-green-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-green-700"
-          >
-            {showForm ? "Cancel" : "Add Entry"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setShowAddCasual(!showAddCasual); setShowForm(false); }}
+              className="border border-green-600 text-green-600 px-4 py-2 rounded text-sm font-medium hover:bg-green-50"
+            >
+              {showAddCasual ? "Cancel" : "+ Add Casual"}
+            </button>
+            <button
+              onClick={() => { setShowForm(!showForm); setShowAddCasual(false); }}
+              className="bg-green-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-green-700"
+            >
+              {showForm ? "Cancel" : "Add Entry"}
+            </button>
+          </div>
         )}
       </div>
+
+      {/* Add Casual Worker Form */}
+      {showAddCasual && canEdit && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+          <h3 className="text-sm font-semibold text-gray-700">Add Casual Worker</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Name *</label>
+              <input
+                type="text"
+                value={casualForm.name}
+                onChange={(e) => setCasualForm({ ...casualForm, name: e.target.value })}
+                placeholder="Full name"
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">National ID</label>
+              <input
+                type="text"
+                value={casualForm.nationalId}
+                onChange={(e) => setCasualForm({ ...casualForm, nationalId: e.target.value })}
+                placeholder="Optional"
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Phone</label>
+              <input
+                type="text"
+                value={casualForm.phone}
+                onChange={(e) => setCasualForm({ ...casualForm, phone: e.target.value })}
+                placeholder="Optional"
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handleAddCasual}
+              disabled={savingCasual || !casualForm.name.trim()}
+              className="bg-green-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+            >
+              {savingCasual ? "Saving..." : "Save Casual"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add Entry Form */}
       {showForm && canEdit && (
