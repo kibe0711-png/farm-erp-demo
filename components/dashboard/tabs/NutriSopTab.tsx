@@ -53,6 +53,7 @@ export default function NutriSopTab() {
 
   // Filter state
   const [selectedCrop, setSelectedCrop] = useState<string>("all");
+  const [productSearch, setProductSearch] = useState("");
 
   const startEdit = (sop: NutriSopItem) => {
     setEditingId(sop.id);
@@ -107,13 +108,17 @@ export default function NutriSopTab() {
   const inputClass =
     "border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 w-full";
 
-  // Get items to display based on filter
+  // Get items to display based on filter + search
   const displayItems = useMemo(() => {
-    if (selectedCrop === "all") {
-      return nutriSop;
+    let items = selectedCrop === "all" ? nutriSop : (groupedByCrop.get(selectedCrop) || []);
+    if (productSearch.trim()) {
+      const q = productSearch.toLowerCase();
+      items = items.filter(
+        (s) => s.products.toLowerCase().includes(q) || s.activeIngredient.toLowerCase().includes(q)
+      );
     }
-    return groupedByCrop.get(selectedCrop) || [];
-  }, [selectedCrop, nutriSop, groupedByCrop]);
+    return items;
+  }, [selectedCrop, nutriSop, groupedByCrop, productSearch]);
 
   return (
     <div className="space-y-6">
@@ -137,11 +142,11 @@ export default function NutriSopTab() {
           </div>
         </div>
 
-        {/* Crop filter */}
+        {/* Filters */}
         {cropCodes.length > 0 && (
-          <div className="flex items-center gap-4 mb-4 pb-4 border-b border-gray-100">
+          <div className="flex items-center gap-4 mb-4 pb-4 border-b border-gray-100 flex-wrap">
             <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600">Filter by Crop:</label>
+              <label className="text-sm text-gray-600">Crop:</label>
               <select
                 value={selectedCrop}
                 onChange={(e) => setSelectedCrop(e.target.value)}
@@ -155,6 +160,27 @@ export default function NutriSopTab() {
                 ))}
               </select>
             </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">Search:</label>
+              <input
+                type="text"
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                placeholder="Product or active ingredient..."
+                className="border border-gray-300 rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 w-64"
+              />
+              {productSearch && (
+                <button
+                  onClick={() => setProductSearch("")}
+                  className="text-sm text-gray-400 hover:text-gray-600"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {productSearch && (
+              <span className="text-xs text-gray-500">{displayItems.length} result{displayItems.length !== 1 ? "s" : ""}</span>
+            )}
           </div>
         )}
 
