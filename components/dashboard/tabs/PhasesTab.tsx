@@ -98,6 +98,9 @@ export default function PhasesTab() {
   });
   const [saving, setSaving] = useState(false);
 
+  // Farm filter (useful for admins who see all farms)
+  const [selectedFarm, setSelectedFarm] = useState<string | null>(null);
+
   // Archive filter
   const [showArchived, setShowArchived] = useState(false);
 
@@ -106,8 +109,9 @@ export default function PhasesTab() {
     () => phasesWithWeeks
       .filter((p) => p.cropCode !== "GENERAL")
       .filter((p) => showArchived ? p.archived : !p.archived)
+      .filter((p) => !selectedFarm || p.farm === selectedFarm)
       .sort((a, b) => a.cropCode.localeCompare(b.cropCode) || a.phaseId.localeCompare(b.phaseId)),
-    [phasesWithWeeks, showArchived]
+    [phasesWithWeeks, showArchived, selectedFarm]
   );
 
   const toggleArchive = async (id: number, archived: boolean) => {
@@ -186,6 +190,9 @@ export default function PhasesTab() {
           <div className="flex items-center gap-4">
             <h2 className="text-lg font-medium text-gray-900">
               {showArchived ? "Archived Phases" : "Uploaded Phases"}
+              <span className="text-sm font-normal text-gray-400 ml-2">
+                ({filteredPhases.length})
+              </span>
             </h2>
             {canManage && archivedCount > 0 && (
               <button
@@ -250,6 +257,21 @@ export default function PhasesTab() {
               ))}
             </select>
           </div>
+          {farmNames.length > 1 && (
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">Farm:</label>
+              <select
+                value={selectedFarm || ""}
+                onChange={(e) => setSelectedFarm(e.target.value || null)}
+                className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Farms</option>
+                {farmNames.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <span className="text-sm text-gray-500">Mon {formattedDate}</span>
         </div>
 
