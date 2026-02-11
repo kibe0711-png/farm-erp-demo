@@ -59,7 +59,7 @@ export default function DailyCompliance() {
   // Snapshot state
   const [saving, setSaving] = useState(false);
   const [snapshotInfo, setSnapshotInfo] = useState<SnapshotInfo | null>(null);
-  const canSaveSnapshot = user?.role === "FARM_MANAGER" || user?.role === "ADMIN";
+  const canSaveSnapshot = user?.role === "ADMIN";
   const weekStr = selectedMonday.toISOString().split("T")[0];
 
   // Check snapshot info when week changes
@@ -244,6 +244,29 @@ export default function DailyCompliance() {
     }
   };
 
+  // Delete snapshot for the current week — reverts to live compliance
+  const handleDeleteSnapshot = async () => {
+    if (!confirm("Delete this snapshot? Compliance will revert to live data from schedules and logs.")) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/compliance-snapshot?weekStart=${weekStr}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete snapshot");
+
+      setSnapshotInfo({ exists: false });
+
+      // Re-fetch to show live data
+      if (selectedFarm) fetchCompliance();
+      else fetchFarmComplianceRates();
+    } catch (error) {
+      console.error("Failed to delete snapshot:", error);
+      alert("Failed to delete snapshot. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Group entries by "type-phaseId-task" for table rows
   const groupedRows = data
     ? Object.values(
@@ -304,10 +327,19 @@ export default function DailyCompliance() {
                 {saving ? "Saving..." : "Save Snapshot"}
               </button>
               {snapshotInfo?.exists && snapshotInfo.snapshotAt && (
-                <span className="text-xs text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200">
-                  Snapshot saved {new Date(snapshotInfo.snapshotAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                  {snapshotInfo.savedByName ? ` by ${snapshotInfo.savedByName}` : ""}
-                </span>
+                <>
+                  <span className="text-xs text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200">
+                    Snapshot saved {new Date(snapshotInfo.snapshotAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    {snapshotInfo.savedByName ? ` by ${snapshotInfo.savedByName}` : ""}
+                  </span>
+                  <button
+                    onClick={handleDeleteSnapshot}
+                    disabled={saving}
+                    className="text-sm text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded border border-red-200 disabled:opacity-50"
+                  >
+                    {saving ? "Deleting..." : "Undo Snapshot"}
+                  </button>
+                </>
               )}
             </div>
           )}
@@ -408,13 +440,24 @@ export default function DailyCompliance() {
               )}
               <div className="flex items-center gap-2 justify-end">
                 {canSaveSnapshot && (
-                  <button
-                    onClick={handleSaveSnapshot}
-                    disabled={saving}
-                    className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded disabled:opacity-50"
-                  >
-                    {saving ? "Saving..." : "Save Snapshot"}
-                  </button>
+                  <>
+                    <button
+                      onClick={handleSaveSnapshot}
+                      disabled={saving}
+                      className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded disabled:opacity-50"
+                    >
+                      {saving ? "Saving..." : "Save Snapshot"}
+                    </button>
+                    {snapshotInfo?.exists && (
+                      <button
+                        onClick={handleDeleteSnapshot}
+                        disabled={saving}
+                        className="text-xs text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded border border-red-200 disabled:opacity-50"
+                      >
+                        Undo
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>

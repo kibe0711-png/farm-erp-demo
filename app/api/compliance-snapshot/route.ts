@@ -63,12 +63,41 @@ export async function GET(request: Request) {
   }
 }
 
+// DELETE ?weekStart=2026-01-26
+// Remove a snapshot for the given week, reverting to live compliance
+export async function DELETE(request: Request) {
+  try {
+    const authUser = await getAuthUser();
+    if (!authUser || !hasPermission(authUser.role, Permission.MANAGE_USERS)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const weekStart = searchParams.get("weekStart");
+
+    if (!weekStart) {
+      return NextResponse.json({ error: "weekStart is required" }, { status: 400 });
+    }
+
+    const weekDate = new Date(weekStart + "T00:00:00.000Z");
+
+    const result = await prisma.complianceSnapshot.deleteMany({
+      where: { weekStartDate: weekDate },
+    });
+
+    return NextResponse.json({ success: true, deleted: result.count });
+  } catch (error) {
+    console.error("Failed to delete compliance snapshot:", error);
+    return NextResponse.json({ error: "Failed to delete snapshot" }, { status: 500 });
+  }
+}
+
 // POST — Save compliance snapshot for a week
 // Body: { weekStartDate: string, entries: ComplianceEntry[] }
 export async function POST(request: Request) {
   try {
     const authUser = await getAuthUser();
-    if (!authUser || !hasPermission(authUser.role, Permission.MANAGE_CROPS)) {
+    if (!authUser || !hasPermission(authUser.role, Permission.MANAGE_USERS)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
