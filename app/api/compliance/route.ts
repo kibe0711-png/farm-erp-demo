@@ -16,7 +16,10 @@ export const GET = withAnalytics(async (request: Request) => {
     }
 
     const farmPhaseIds = idsParam.split(",").map(Number).filter((n) => !isNaN(n));
-    const weekDate = new Date(weekStart);
+    // Parse as explicit UTC to match how schedule APIs store dates
+    const weekDate = new Date(weekStart + "T00:00:00.000Z");
+    const weekDateNextDay = new Date(weekDate);
+    weekDateNextDay.setUTCDate(weekDateNextDay.getUTCDate() + 1);
     const forceLive = searchParams.get("forceLive") === "true";
     const farmFilter = searchParams.get("farm"); // Optional: filter snapshot by farm name
 
@@ -65,13 +68,13 @@ export const GET = withAnalytics(async (request: Request) => {
     const [laborSchedules, nutriSchedules, harvestSchedules, attendanceRecords, feedingRecords, harvestLogs, laborSops, nutriSops, farmPhases] =
       await Promise.all([
         prisma.laborSchedule.findMany({
-          where: { farmPhaseId: { in: farmPhaseIds }, weekStartDate: weekDate },
+          where: { farmPhaseId: { in: farmPhaseIds }, weekStartDate: { gte: weekDate, lt: weekDateNextDay } },
         }),
         prisma.nutriSchedule.findMany({
-          where: { farmPhaseId: { in: farmPhaseIds }, weekStartDate: weekDate },
+          where: { farmPhaseId: { in: farmPhaseIds }, weekStartDate: { gte: weekDate, lt: weekDateNextDay } },
         }),
         prisma.harvestSchedule.findMany({
-          where: { farmPhaseId: { in: farmPhaseIds }, weekStartDate: weekDate },
+          where: { farmPhaseId: { in: farmPhaseIds }, weekStartDate: { gte: weekDate, lt: weekDateNextDay } },
         }),
         prisma.attendanceRecord.findMany({
           where: {
