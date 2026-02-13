@@ -76,11 +76,19 @@ export async function POST(request: Request) {
       },
     });
 
+    // Look up farmId for each farmPhaseId so we can denormalize it
+    const phases = await prisma.farmPhase.findMany({
+      where: { id: { in: farmPhaseIds } },
+      select: { id: true, farmId: true },
+    });
+    const phaseToFarmId = new Map(phases.map((p) => [p.id, p.farmId]));
+
     // Insert new entries
     if (entries.length > 0) {
       await prisma.harvestSchedule.createMany({
         data: entries.map((e) => ({
           farmPhaseId: e.farmPhaseId,
+          farmId: phaseToFarmId.get(e.farmPhaseId) ?? null,
           weekStartDate: queryDate,
           dayOfWeek: e.dayOfWeek,
           pledgeKg: e.pledgeKg != null ? e.pledgeKg : null,

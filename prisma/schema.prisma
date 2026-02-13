@@ -17,6 +17,7 @@ model Farm {
   casualWorkers   CasualWorker[]
   activityRates   ActivityRate[]
   attendanceRecords AttendanceRecord[]
+  harvestSchedules  HarvestSchedule[]
 
   @@map("farms")
 }
@@ -162,12 +163,15 @@ model CropKeyInput {
 model HarvestSchedule {
   id            Int      @id @default(autoincrement())
   farmPhaseId   Int      @map("farm_phase_id")
+  farmId        Int?     @map("farm_id")
+  farmRef       Farm?    @relation(fields: [farmId], references: [id])
   weekStartDate DateTime @map("week_start_date") @db.Date
   dayOfWeek     Int      @map("day_of_week")
   pledgeKg      Decimal? @map("pledge_kg") @db.Decimal(10, 2)
   createdAt     DateTime @default(now()) @map("created_at")
 
   @@unique([farmPhaseId, weekStartDate, dayOfWeek])
+  @@index([farmId])
   @@map("harvest_schedules")
 }
 
