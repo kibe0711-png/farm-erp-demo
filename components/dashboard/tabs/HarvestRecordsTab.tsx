@@ -68,7 +68,9 @@ export default function HarvestRecordsTab() {
   }, [weekStr, weekEndStr]);
 
   // Today's day-of-week index (0=Mon..6=Sun) for WTD calculations
-  const todayDow = useMemo(() => (new Date().getDay() + 6) % 7, []);
+  // For past weeks, use 6 (Sunday) so all days are included
+  const isCurrentWeek = today >= weekStr && today <= weekEndStr;
+  const todayDow = useMemo(() => isCurrentWeek ? (new Date().getDay() + 6) % 7 : 6, [isCurrentWeek]);
 
   // Active phases for the recording dropdown
   const farmPhases = selectedFarm
@@ -204,14 +206,13 @@ export default function HarvestRecordsTab() {
                 .filter((p) => fpIds.includes(p.farmPhaseId) && p.dayOfWeek <= todayDow)
                 .reduce((sum, p) => sum + (Number(p.pledgeKg) || 0), 0);
 
-              // Harvested WTD: logs from Mon through today
-              const todayEnd = new Date();
-              todayEnd.setHours(23, 59, 59, 999);
+              // Harvested WTD: logs from Mon through today (or full week if past week)
+              const wtdEnd = isCurrentWeek ? new Date() : weekEnd;
               const harvestedWtd = harvestLogs
                 .filter((log) => {
                   if (!fpIds.includes(log.farmPhaseId)) return false;
                   const d = new Date(log.logDate);
-                  return d >= selectedMonday && d <= todayEnd;
+                  return d >= selectedMonday && d <= wtdEnd;
                 })
                 .reduce((sum, log) => sum + (Number(log.actualKg) || 0), 0);
 
