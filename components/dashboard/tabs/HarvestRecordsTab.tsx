@@ -36,6 +36,7 @@ export default function HarvestRecordsTab() {
   const [submitting, setSubmitting] = useState(false);
   const [pledges, setPledges] = useState<PledgeEntry[]>([]);
   const [allPledges, setAllPledges] = useState<PledgeEntry[]>([]);
+  const [dayFilter, setDayFilter] = useState<string>("all");
 
   const weekStr = selectedMonday.toISOString().split("T")[0];
 
@@ -60,11 +61,12 @@ export default function HarvestRecordsTab() {
     notes: "",
   });
 
-  // Reset form date when week changes
+  // Reset form date and day filter when week changes
   useEffect(() => {
     const t = toLocalDateStr(new Date());
     const newDefault = (t >= weekStr && t <= weekEndStr) ? t : weekStr;
     setLogForm((prev) => ({ ...prev, logDate: newDefault }));
+    setDayFilter("all");
   }, [weekStr, weekEndStr]);
 
   // Today's day-of-week index (0=Mon..6=Sun) for WTD calculations
@@ -83,14 +85,29 @@ export default function HarvestRecordsTab() {
     : [];
   const allFarmPhaseIds = allFarmPhases.map((p) => p.id);
 
+  // Days of the week for the filter
+  const weekDays = useMemo(() => {
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    return days.map((label, i) => {
+      const d = new Date(selectedMonday);
+      d.setDate(d.getDate() + i);
+      return { label, dateStr: toLocalDateStr(d) };
+    });
+  }, [selectedMonday]);
+
   // Filter harvest logs to selected farm + selected week (includes archived phases)
   const farmHarvestLogs = useMemo(
     () => harvestLogs.filter((log) => {
       if (!allFarmPhaseIds.includes(log.farmPhaseId)) return false;
       const d = new Date(log.logDate);
-      return d >= selectedMonday && d <= weekEnd;
+      if (d < selectedMonday || d > weekEnd) return false;
+      if (dayFilter !== "all") {
+        const logDateStr = toLocalDateStr(d);
+        if (logDateStr !== dayFilter) return false;
+      }
+      return true;
     }),
-    [harvestLogs, allFarmPhaseIds.join(","), selectedMonday, weekEnd]
+    [harvestLogs, allFarmPhaseIds.join(","), selectedMonday, weekEnd, dayFilter]
   );
 
   // Fetch pledges for this farm's phases including archived (drill-in view)
@@ -310,6 +327,34 @@ export default function HarvestRecordsTab() {
           <p className="text-green-600 font-medium">
             {farmSummaries.find((f) => f.farm === selectedFarm)?.totalAcreage.toFixed(2)} Ha total
           </p>
+        </div>
+
+        {/* Day filter */}
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <span className="text-sm text-gray-500 mr-1">Filter by day:</span>
+          <button
+            onClick={() => setDayFilter("all")}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              dayFilter === "all"
+                ? "bg-green-600 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            All week
+          </button>
+          {weekDays.map((wd) => (
+            <button
+              key={wd.dateStr}
+              onClick={() => setDayFilter(wd.dateStr)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                dayFilter === wd.dateStr
+                  ? "bg-green-600 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {wd.label}
+            </button>
+          ))}
         </div>
 
         <div className="mb-6 p-4 bg-green-50 rounded-lg">

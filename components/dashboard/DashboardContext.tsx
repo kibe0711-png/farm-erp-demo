@@ -729,18 +729,20 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     return phases.reduce((acc: FarmSummary[], phase) => {
       const existing = acc.find((f) => f.farm === phase.farm);
       const areaHa = parseFloat(String(phase.areaHa)) || 0;
+      const weeksSinceSowing = calculateWeeksSinceSowing(phase.sowingDate, selectedMonday);
+      const activeHa = weeksSinceSowing > 0 ? areaHa : 0;
       const laborCost = calcLaborCost(phase);
       const nutriCost = calcNutriCost(phase);
 
       if (existing) {
-        existing.totalAcreage += areaHa;
+        existing.totalAcreage += activeHa;
         existing.phaseCount += 1;
         existing.totalLaborCost += laborCost;
         existing.totalNutriCost += nutriCost;
       } else {
         acc.push({
           farm: phase.farm,
-          totalAcreage: areaHa,
+          totalAcreage: activeHa,
           phaseCount: 1,
           totalLaborCost: laborCost,
           totalNutriCost: nutriCost,
