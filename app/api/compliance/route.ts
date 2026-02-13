@@ -253,6 +253,7 @@ export const GET = withAnalytics(async (request: Request) => {
     return NextResponse.json({ entries, summary: { total, done, missed, pending, upcoming, complianceRate }, source: "live" });
   } catch (error) {
     console.error("Failed to fetch compliance:", error);
-    return NextResponse.json({ error: "Failed to fetch compliance" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Failed to fetch compliance";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 });
