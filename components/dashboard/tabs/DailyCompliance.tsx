@@ -81,42 +81,45 @@ export default function DailyCompliance() {
   // already contains the right phases regardless of current sowingDate.
   const isViewingSnapshot = !!snapshotInfo?.exists;
 
-  // Fetch compliance rates for all farms (for farm cards display)
+  // Fetch compliance rates for all farms in a single API call
   const fetchFarmComplianceRates = useCallback(async () => {
-    const rates: Record<string, number | null> = {};
+    const allPhaseIds = phases
+      .filter((p) => isViewingSnapshot || calculateWeeksSinceSowing(p.sowingDate, selectedMonday) >= 0)
+      .map((p) => p.id);
 
-    for (const farm of farmSummaries) {
-      const farmPhaseIds = phases
-        .filter((p) => p.farm === farm.farm)
-        .filter((p) => isViewingSnapshot || calculateWeeksSinceSowing(p.sowingDate, selectedMonday) >= 0)
-        .map((p) => p.id);
-
-      // When viewing snapshot, pass farm name so API can match by farm
-      // even if phase IDs are incomplete due to sowingDate changes
-      const farmParam = isViewingSnapshot ? `&farm=${encodeURIComponent(farm.farm)}` : "";
-
-      if (farmPhaseIds.length === 0 && !isViewingSnapshot) {
-        rates[farm.farm] = null;
-        continue;
-      }
-
-      try {
-        const ids = farmPhaseIds.length > 0 ? farmPhaseIds.join(",") : "0";
-        const res = await fetch(
-          `/api/compliance?farmPhaseIds=${ids}&weekStart=${weekStr}${farmParam}`
-        );
-        if (res.ok) {
-          const complianceData: ComplianceData = await res.json();
-          rates[farm.farm] = complianceData.summary.complianceRate;
-        } else {
-          rates[farm.farm] = null;
-        }
-      } catch {
-        rates[farm.farm] = null;
-      }
+    if (allPhaseIds.length === 0 && !isViewingSnapshot) {
+      setFarmComplianceRates({});
+      return;
     }
 
-    setFarmComplianceRates(rates);
+    try {
+      const ids = allPhaseIds.length > 0 ? allPhaseIds.join(",") : "0";
+      const res = await fetch(
+        `/api/compliance?farmPhaseIds=${ids}&weekStart=${weekStr}`
+      );
+      if (!res.ok) {
+        setFarmComplianceRates({});
+        return;
+      }
+      const complianceData: ComplianceData = await res.json();
+
+      // Split entries by farm and compute per-farm compliance rates
+      const rates: Record<string, number | null> = {};
+      for (const farm of farmSummaries) {
+        const farmEntries = complianceData.entries.filter((e) => e.farm === farm.farm);
+        if (farmEntries.length === 0) {
+          rates[farm.farm] = null;
+          continue;
+        }
+        const done = farmEntries.filter((e) => e.status === "done").length;
+        const missed = farmEntries.filter((e) => e.status === "missed").length;
+        const countable = done + missed;
+        rates[farm.farm] = countable > 0 ? Math.round((done / countable) * 100) : null;
+      }
+      setFarmComplianceRates(rates);
+    } catch {
+      setFarmComplianceRates({});
+    }
   }, [farmSummaries, phases, selectedMonday, weekStr, isViewingSnapshot]);
 
   useEffect(() => {
