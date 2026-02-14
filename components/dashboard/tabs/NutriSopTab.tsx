@@ -1,9 +1,16 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import CSVUploader from "@/components/CSVUploader";
 import { useDashboard, NUTRI_HEADERS, type NutriSopItem } from "../DashboardContext";
 import { hasPermission, Permission } from "@/lib/auth/roles";
+
+interface InventoryProduct {
+  id: number;
+  product: string;
+  category: string;
+  unit: string;
+}
 
 export default function NutriSopTab() {
   const {
@@ -11,12 +18,82 @@ export default function NutriSopTab() {
     loading,
     handleNutriUpload,
     handleClearNutri,
+    handleAddNutriSop,
     handleUpdateNutriSop,
     handleDeleteNutriSop,
     user,
   } = useDashboard();
 
   const canManage = user?.role ? hasPermission(user.role, Permission.MANAGE_CROPS) : false;
+
+  // Fetch inventory products for dropdown
+  const [inventoryProducts, setInventoryProducts] = useState<InventoryProduct[]>([]);
+  useEffect(() => {
+    fetch("/api/product-inventory")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setInventoryProducts(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Deduplicate product names (same product may exist across farms)
+  const uniqueProducts = useMemo(() => {
+    const seen = new Set<string>();
+    return inventoryProducts.filter((p) => {
+      if (seen.has(p.product)) return false;
+      seen.add(p.product);
+      return true;
+    });
+  }, [inventoryProducts]);
+
+  // Add form state
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addValues, setAddValues] = useState({
+    cropCode: "",
+    week: "",
+    products: "",
+    activeIngredient: "",
+    rateHa: "",
+    unitPriceRwf: "",
+    cost: "",
+  });
+  const [adding, setAdding] = useState(false);
+
+  const resetAddForm = () => {
+    setAddValues({
+      cropCode: "",
+      week: "",
+      products: "",
+      activeIngredient: "",
+      rateHa: "",
+      unitPriceRwf: "",
+      cost: "",
+    });
+  };
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addValues.cropCode || !addValues.products) return;
+    setAdding(true);
+    try {
+      await handleAddNutriSop({
+        cropCode: addValues.cropCode,
+        week: parseInt(addValues.week, 10) || 0,
+        products: addValues.products,
+        activeIngredient: addValues.activeIngredient,
+        rateLitre: 0,
+        rateHa: parseFloat(addValues.rateHa) || 0,
+        unitPriceRwf: parseFloat(addValues.unitPriceRwf) || 0,
+        cost: parseFloat(addValues.cost) || 0,
+      });
+      resetAddForm();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to add");
+    } finally {
+      setAdding(false);
+    }
+  };
 
   // Group by crop code for display
   const groupedByCrop = useMemo(() => {
@@ -44,7 +121,6 @@ export default function NutriSopTab() {
     week: "",
     products: "",
     activeIngredient: "",
-    rateLitre: "",
     rateHa: "",
     unitPriceRwf: "",
     cost: "",
@@ -61,7 +137,6 @@ export default function NutriSopTab() {
       week: String(sop.week),
       products: sop.products,
       activeIngredient: sop.activeIngredient,
-      rateLitre: String(sop.rateLitre),
       rateHa: String(sop.rateHa),
       unitPriceRwf: String(sop.unitPriceRwf),
       cost: String(sop.cost),
@@ -75,7 +150,6 @@ export default function NutriSopTab() {
       week: "",
       products: "",
       activeIngredient: "",
-      rateLitre: "",
       rateHa: "",
       unitPriceRwf: "",
       cost: "",
@@ -91,7 +165,6 @@ export default function NutriSopTab() {
         week: parseInt(editValues.week, 10) || 0,
         products: editValues.products,
         activeIngredient: editValues.activeIngredient,
-        rateLitre: parseFloat(editValues.rateLitre) || 0,
         rateHa: parseFloat(editValues.rateHa) || 0,
         unitPriceRwf: parseFloat(editValues.unitPriceRwf) || 0,
         cost: parseFloat(editValues.cost) || 0,
@@ -126,6 +199,14 @@ export default function NutriSopTab() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-medium text-gray-900">Uploaded SOP Nutri</h2>
           <div className="flex items-center gap-3">
+            {canManage && (
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="text-sm text-white bg-purple-600 hover:bg-purple-700 px-3 py-1.5 rounded"
+              >
+                {showAddForm ? "Cancel" : "+ Add Entry"}
+              </button>
+            )}
             {nutriSop.length > 0 && (
               <button
                 onClick={handleClearNutri}
@@ -136,6 +217,112 @@ export default function NutriSopTab() {
             )}
           </div>
         </div>
+
+        {/* Add SOP form */}
+        {showAddForm && canManage && (
+          <form onSubmit={handleAdd} className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+            <h3 className="text-sm font-medium text-purple-800 mb-3">Add New SOP Entry</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Crop Code *</label>
+                <input
+                  value={addValues.cropCode}
+                  onChange={(e) => setAddValues({ ...addValues, cropCode: e.target.value })}
+                  className={inputClass}
+                  placeholder="e.g. FB"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Week *</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={addValues.week}
+                  onChange={(e) => setAddValues({ ...addValues, week: e.target.value })}
+                  className={inputClass}
+                  placeholder="0"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Product *</label>
+                {uniqueProducts.length > 0 ? (
+                  <select
+                    value={addValues.products}
+                    onChange={(e) => setAddValues({ ...addValues, products: e.target.value })}
+                    className={inputClass}
+                    required
+                  >
+                    <option value="">Select product</option>
+                    {uniqueProducts.map((p) => (
+                      <option key={p.id} value={p.product}>
+                        {p.product} ({p.category})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={addValues.products}
+                    onChange={(e) => setAddValues({ ...addValues, products: e.target.value })}
+                    className={inputClass}
+                    placeholder="Product name"
+                    required
+                  />
+                )}
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Active Ingredient</label>
+                <input
+                  value={addValues.activeIngredient}
+                  onChange={(e) => setAddValues({ ...addValues, activeIngredient: e.target.value })}
+                  className={inputClass}
+                  placeholder="Optional"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Rate/Ha</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={addValues.rateHa}
+                  onChange={(e) => setAddValues({ ...addValues, rateHa: e.target.value })}
+                  className={inputClass}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Unit Price (RWF)</label>
+                <input
+                  type="number"
+                  step="1"
+                  value={addValues.unitPriceRwf}
+                  onChange={(e) => setAddValues({ ...addValues, unitPriceRwf: e.target.value })}
+                  className={inputClass}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Cost</label>
+                <input
+                  type="number"
+                  step="1"
+                  value={addValues.cost}
+                  onChange={(e) => setAddValues({ ...addValues, cost: e.target.value })}
+                  className={inputClass}
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={adding || !addValues.cropCode || !addValues.products}
+              className="mt-3 text-sm text-white bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded disabled:opacity-50"
+            >
+              {adding ? "Adding..." : "Add to SOP"}
+            </button>
+          </form>
+        )}
 
         {/* Crop filter */}
         {cropCodes.length > 0 && (
@@ -171,7 +358,6 @@ export default function NutriSopTab() {
                   <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Week</th>
                   <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Products</th>
                   <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active Ingredient</th>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate/Litre</th>
                   <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate/Ha</th>
                   <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
                   <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
@@ -234,20 +420,6 @@ export default function NutriSopTab() {
                           />
                         ) : (
                           sop.activeIngredient || "-"
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={editValues.rateLitre}
-                            onChange={(e) => setEditValues({ ...editValues, rateLitre: e.target.value })}
-                            className={inputClass}
-                            style={{ width: "80px" }}
-                          />
-                        ) : (
-                          parseFloat(String(sop.rateLitre)).toFixed(2)
                         )}
                       </td>
                       <td className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">

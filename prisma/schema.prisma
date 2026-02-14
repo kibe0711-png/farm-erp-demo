@@ -18,6 +18,7 @@ model Farm {
   activityRates   ActivityRate[]
   attendanceRecords AttendanceRecord[]
   harvestSchedules  HarvestSchedule[]
+  productInventory  ProductInventory[]
 
   @@map("farms")
 }
@@ -331,4 +332,23 @@ model AttendanceRecord {
   @@index([farmId, date])
   @@index([weekStartDate, farm])
   @@map("attendance_records")
+}
+
+model ProductInventory {
+  id        Int      @id @default(autoincrement())
+  product   String   @db.Text
+  category  String   @db.Text
+  unit      String   @db.VarChar(20)
+  variety   String?  @db.VarChar(100)
+  cropCode  String?  @map("crop_code") @db.VarChar(50)
+  farmId    Int      @map("farm_id")
+  farm      Farm     @relation(fields: [farmId], references: [id])
+  quantity  Decimal  @default(0) @db.Decimal(12, 4)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([product, farmId])
+  @@index([farmId])
+  @@index([category])
+  @@map("product_inventory")
 }

@@ -304,6 +304,7 @@ interface DashboardContextValue {
   handleAddPhase: (phase: Omit<Phase, "id">) => Promise<void>;
 
   // Nutri SOP CRUD
+  handleAddNutriSop: (entry: Omit<NutriSopItem, "id">) => Promise<void>;
   handleUpdateNutriSop: (id: number, updates: Partial<NutriSopItem>) => Promise<void>;
   handleDeleteNutriSop: (id: number) => Promise<void>;
 
@@ -651,6 +652,19 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const userName = user?.name ?? "";
 
   // ── Nutri SOP CRUD handlers (stable refs) ─────────────────────
+  const handleAddNutriSop = useCallback(async (entry: Omit<NutriSopItem, "id">) => {
+    const res = await fetch("/api/nutri-sop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([entry]),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || "Failed to add nutri SOP");
+    }
+    fetchNutriSop();
+  }, [fetchNutriSop]);
+
   const handleUpdateNutriSop = useCallback(async (id: number, updates: Partial<NutriSopItem>) => {
     const res = await fetch("/api/nutri-sop", {
       method: "PATCH",
@@ -791,6 +805,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     handleUpdatePhase,
     handleDeletePhase,
     handleAddPhase,
+    handleAddNutriSop,
     handleUpdateNutriSop,
     handleDeleteNutriSop,
     user,
@@ -807,7 +822,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     handleFeedingSubmit, handleDeleteFeedingRecord,
     handleHarvestLogSubmit, handleDeleteHarvestLog,
     handleUpdatePhase, handleDeletePhase, handleAddPhase,
-    handleUpdateNutriSop, handleDeleteNutriSop,
+    handleAddNutriSop, handleUpdateNutriSop, handleDeleteNutriSop,
     user, userName, handleLogout,
   ]);
 
